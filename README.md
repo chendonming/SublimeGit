@@ -11,7 +11,8 @@ Electron 的性能包袱。
    色彩区分，自动适配当前 Color Scheme）。顶部有 **Push / Pull / Undo 按钮**，
    标题行标注 upstream 与 `↑ahead ↓behind`，未推送的本地提交列在 **OUTGOING**
    区块。
-2. **Git Timeline 面板** — 整个仓库的提交历史，列表只显示 title；提交行尾标注
+2. **Git Timeline 面板** — 整个仓库的提交历史，每行从左到右为
+   hash / 作者 / 相对时间 / title（作者超宽截断为 `…`，各列定宽对齐）；提交行尾标注
    推送状态（`↑` = 还不在任何远程上，`(origin/main)` = 该提交是远程分支指向处）；
    鼠标悬停弹出完整提交信息（title / body / trailers footer / 作者 / 时间）；
    `⏎` 打开该提交变更文件列表，选择文件即查看该提交的 Diff。

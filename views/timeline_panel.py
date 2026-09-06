@@ -1,9 +1,9 @@
 """Git Timeline panel.
 
-The repository's commit history in a scratch view. Rows show short hash +
-title plus a pushed-state marker: ↑ for commits reachable from no
-remote-tracking ref, or the remote branch name when a remote ref points at
-the commit. Hovering a row pops up the full commit message (title / body /
+The repository's commit history in a scratch view. Rows show short hash,
+author, relative time and title plus a pushed-state marker: ↑ for commits
+reachable from no remote-tracking ref, or the remote branch name when a
+remote ref points at the commit. Hovering a row pops up the full commit message (title / body /
 trailers) via minihtml. Enter opens the commit's changed-file list; picking a
 file opens its diff. Pagination is manual: `m` loads the next page.
 
@@ -23,6 +23,14 @@ from SublimeGit.views import common, diff_view
 KIND = "timeline"
 MARK_UNPUSHED_SCOPE = "markup.changed.diff"  # the ↑ marker on unpushed rows
 MARK_REF_SCOPE = "comment"                   # the (origin/main) ref label
+AUTHOR_W = 12  # author column width; longer names truncate to …
+TIME_W = 8     # relative-time column width; "just now" is the widest label
+
+
+def _fit(text, width):
+    """Truncate to `width` with a trailing … , so columns stay aligned."""
+    text = text or ""
+    return text if len(text) <= width else text[:width - 1] + "…"
 
 
 def open_timeline(window):
@@ -163,8 +171,21 @@ def _marker_text(commit, unpushed, tips):
 
 def _commit_line(c, unpushed, tips):
     mark = _marker_text(c, unpushed, tips)
-    text = "  {}  {}".format(c.short, c.title)
+    # fixed-width author/time columns: load_more appends rows without
+    # redrawing earlier ones, so widths must not depend on the loaded page
+    text = "  {}  {}  {}  {}".format(
+        c.short,
+        _fit(c.author, AUTHOR_W).ljust(AUTHOR_W),
+        _fit(relative_time(c.date_iso), TIME_W).ljust(TIME_W),
+        c.title)
     return text + "  " + mark if mark else text
+
+
+def _mark_offset(short_len, title_len):
+    """Char offset of the row's trailing pushed-state marker (used by _tint).
+
+    The marker sits two spaces after the title, so the separator counts too."""
+    return 2 + short_len + 2 + AUTHOR_W + 2 + TIME_W + 2 + title_len + 2
 
 
 def load_more(view):
@@ -226,7 +247,8 @@ def _tint(view):
         mark = _marker_text(commit, unpushed, tips)
         if not mark:
             continue
-        mstart = view.text_point(row, 2 + len(commit.short) + 2 + len(commit.title))
+        mstart = view.text_point(
+            row, _mark_offset(len(commit.short), len(commit.title)))
         region = sublime.Region(mstart, mstart + len(mark))
         (marks if commit.hash in unpushed else refs).append(region)
     view.erase_regions("sg-hash")
