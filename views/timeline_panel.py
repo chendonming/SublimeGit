@@ -33,6 +33,7 @@ def open_timeline(window):
 def _ensure_view(window, root):
     for view in window.views():
         if common.is_kind(view, KIND) and common.state(view).get("root") == root:
+            common.configure_panel(view, KIND, "Git Timeline")
             return view
     view = window.new_file()
     common.configure_panel(view, KIND, "Git Timeline")
@@ -41,6 +42,9 @@ def _ensure_view(window, root):
 
 
 def refresh(view):
+    # re-assert the keymap flag: panels restored from a previous session carry
+    # their settings but not necessarily flags added later
+    view.settings().set("sublimegit_timeline", True)
     st = common.state(view)
     root = st.get("root")
     if not root:
@@ -190,6 +194,7 @@ def open_commit_at_row(view, row):
     st = common.state(view)
     commit = st.get("rows", {}).get(row)
     if commit is None:
+        view.set_status("sublimegit", "move the cursor to a commit line, then press ⏎")
         return
     show_commit_files(view.window(), st.get("root"), commit)
 

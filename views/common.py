@@ -44,6 +44,9 @@ def configure_panel(view, kind_value, name, gutter=False):
     view.set_read_only(True)
     s = view.settings()
     s.set(KIND_KEY, kind_value)
+    # flat boolean flags are what keymap contexts match on; dotted setting
+    # names proved unreliable there
+    s.set("sublimegit_" + kind_value, True)
     s.set("gutter", gutter)
     s.set("word_wrap", False)
 

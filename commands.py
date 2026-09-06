@@ -21,6 +21,10 @@ class SublimegitReplaceTextCommand(sublime_plugin.TextCommand):
         view.set_read_only(False)
         view.replace(edit, sublime.Region(0, view.size()), text)
         view.set_read_only(read_only)
+        # replace() maps the old selection onto the new text, leaving the whole
+        # buffer selected; reset to a caret at the top so keys act on a cursor
+        view.sel().clear()
+        view.sel().add(sublime.Region(0, 0))
 
 
 class SublimegitInsertAtLineCommand(sublime_plugin.TextCommand):

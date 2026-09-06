@@ -11,10 +11,14 @@ from SublimeGit.views import changes_panel, common, timeline_panel
 class SublimegitEventListener(sublime_plugin.EventListener):
 
     def on_activated_async(self, view):
-        if common.is_kind(view, "changes"):
+        k = common.kind(view)
+        if k in ("changes", "timeline"):
             st = common.state(view)
             if time.time() - st.get("refreshed_at", 0) > 2.0:
-                changes_panel.refresh(view)
+                if k == "changes":
+                    changes_panel.refresh(view)
+                else:
+                    timeline_panel.refresh(view)
 
     def on_post_save_async(self, view):
         window = view.window()

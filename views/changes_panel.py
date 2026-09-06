@@ -37,6 +37,7 @@ def open_changes(window):
 def _ensure_view(window, root):
     for view in window.views():
         if common.is_kind(view, KIND) and common.state(view).get("root") == root:
+            common.configure_panel(view, KIND, "Git Changes")
             return view
     view = window.new_file()
     common.configure_panel(view, KIND, "Git Changes")
@@ -45,6 +46,9 @@ def _ensure_view(window, root):
 
 
 def refresh(view, on_done=None):
+    # re-assert the keymap flag: panels restored from a previous session carry
+    # their settings but not necessarily flags added later
+    view.settings().set("sublimegit_changes", True)
     st = common.state(view)
     root = st.get("root")
     if not root:
@@ -128,6 +132,7 @@ def open_at_row(view, row):
     st = common.state(view)
     f = st.get("rows", {}).get(row)
     if f is None:
+        view.set_status("sublimegit", "move the cursor to a file line, then press ⏎")
         return
     diff_view.open_diff(view.window(), _context_for(st.get("root"), f))
 
