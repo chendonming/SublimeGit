@@ -64,7 +64,7 @@ Mariana、Monokai、Dracula 等常见主题天然支持，无需额外配色配�
 ```
 SublimeGit/
 ├── plugin.py               # 入口：显式拉起各模块
-├── commands.py             # 所有 sublime 命令（薄壳）
+├── commands.py             # 所有 sublime 命令类（薄壳）+ 渲染用 TextCommand
 ├── listeners.py            # 事件：激活刷新 / 悬停 popup / 双击
 ├── core/                   # 纯逻辑层（不 import sublime，可独立单测）
 │   ├── git_runner.py       # subprocess 封装：list argv、worker 线程、超时
@@ -83,6 +83,9 @@ SublimeGit/
 - **保护工作目录**：全部 git 调用均为只读，并设置 `GIT_OPTIONAL_LOCKS=0`
   （连 index 的可选锁都不碰）；所有视图都是 scratch + read-only，绝不向
   工作区写任何临时文件。
+- **命令类只放包顶层**：Sublime 只扫描包顶层 `.py` 文件来注册
+  `sublime_plugin` 命令类；`core/`、`views/` 里的模块仅被 import，不会被
+  扫描。命令类放子目录会静默失效（视图创建成功但永远渲染不出内容）。
 - **全程异步**：git 子进程跑在 worker 线程，结果经 `sublime.set_timeout`
   回 UI 线程，大仓库不会卡界面。
 - **统一 Diff 模型**：`DiffContext(left_spec, right_spec, path, …)` 用

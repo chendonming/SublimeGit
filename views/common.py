@@ -1,10 +1,12 @@
-"""Shared helpers for SublimeGit views: view tagging, in-memory state, repo
-lookup, and the buffer-editing TextCommands every panel renders through."""
+"""Shared helpers for SublimeGit views: view tagging, in-memory state, and
+repo lookup.
+
+Note: no sublime_plugin.Command subclasses live in subdirectory modules —
+Sublime only registers commands from the package's top-level .py files, so
+they all live in commands.py.
+"""
 
 import os
-
-import sublime
-import sublime_plugin
 
 from SublimeGit.core import git_runner
 from SublimeGit.core import repo as repo_mod
@@ -80,25 +82,3 @@ def resolve_repo(window, on_ok, on_fail=None, prefer_path=None):
             on_fail()
 
     git_runner.run_bg(work, done)
-
-
-class SublimegitReplaceTextCommand(sublime_plugin.TextCommand):
-    """Replace the whole buffer — how every panel renders itself."""
-
-    def run(self, edit, text=""):
-        view = self.view
-        read_only = view.is_read_only()
-        view.set_read_only(False)
-        view.replace(edit, sublime.Region(0, view.size()), text)
-        view.set_read_only(read_only)
-
-
-class SublimegitInsertAtLineCommand(sublime_plugin.TextCommand):
-    """Insert text at the start of a line (used to append timeline pages)."""
-
-    def run(self, edit, row=0, text=""):
-        view = self.view
-        read_only = view.is_read_only()
-        view.set_read_only(False)
-        view.insert(edit, view.text_point(row, 0), text)
-        view.set_read_only(read_only)

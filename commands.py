@@ -1,8 +1,37 @@
-"""All SublimeGit commands. The actual logic lives in the views modules."""
+"""All SublimeGit commands.
 
+Every sublime_plugin command class MUST live in this top-level module (or
+another top-level one): Sublime only scans a package's top-level .py files
+for command classes, so classes in subdirectory modules are never
+registered. The actual logic lives in the views modules.
+"""
+
+import sublime
 import sublime_plugin
 
 from SublimeGit.views import changes_panel, common, diff_view, file_history, timeline_panel
+
+
+class SublimegitReplaceTextCommand(sublime_plugin.TextCommand):
+    """Replace the whole buffer — how every panel renders itself."""
+
+    def run(self, edit, text=""):
+        view = self.view
+        read_only = view.is_read_only()
+        view.set_read_only(False)
+        view.replace(edit, sublime.Region(0, view.size()), text)
+        view.set_read_only(read_only)
+
+
+class SublimegitInsertAtLineCommand(sublime_plugin.TextCommand):
+    """Insert text at the start of a line (used to append timeline pages)."""
+
+    def run(self, edit, row=0, text=""):
+        view = self.view
+        read_only = view.is_read_only()
+        view.set_read_only(False)
+        view.insert(edit, view.text_point(row, 0), text)
+        view.set_read_only(read_only)
 
 
 class SublimegitOpenChangesCommand(sublime_plugin.WindowCommand):

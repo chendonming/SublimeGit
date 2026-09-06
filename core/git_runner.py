@@ -90,6 +90,7 @@ def run_bg(fn, on_done=None, on_error=None):
         try:
             result = fn()
         except Exception as e:  # report anything to the UI, never crash the thread
+            print("SublimeGit: background task failed:", repr(e))
             if on_error:
                 _ui(lambda: on_error(e))
             return
