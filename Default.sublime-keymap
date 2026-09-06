@@ -39,6 +39,12 @@
       "context": [{ "key": "setting.sublimegit_timeline" }] },
     { "keys": ["m"], "command": "sublimegit_load_more",
       "context": [{ "key": "setting.sublimegit_timeline" }] },
+    { "keys": ["j"], "command": "sublimegit_diff_navigate",
+      "args": { "direction": "next" },
+      "context": [{ "key": "setting.sublimegit_diff" }] },
+    { "keys": ["k"], "command": "sublimegit_diff_navigate",
+      "args": { "direction": "prev" },
+      "context": [{ "key": "setting.sublimegit_diff" }] },
     { "keys": ["escape"], "command": "sublimegit_close_diff",
       "context": [{ "key": "setting.sublimegit_diff" }] }
 ]

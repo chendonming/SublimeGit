@@ -67,6 +67,9 @@ def _render(window, ctx, left_bytes, right_bytes):
     rule = "─" * 60
     left_text = "\n".join([left_header, rule] + left_col) + "\n"
     right_text = "\n".join([right_header, rule] + right_col) + "\n"
+    # change-block spans in buffer rows (hunks() counts from the first output
+    # row; the two header lines sit above them)
+    hunks = [(HEADER_ROWS + s, HEADER_ROWS + e) for s, e in diff_engine.hunks(rows)]
 
     close_diff(window, restore_layout=False)
     if window.settings().get(PREV_LAYOUT_KEY) is None:
@@ -95,6 +98,7 @@ def _render(window, ctx, left_bytes, right_bytes):
             "SG · {} · {} ({})".format(ctx.path, header, role),
             gutter=True)
         view.settings().set(DIFF_KEY, {"role": role, "ctx": ctx_json})
+        common.state(view)["hunks"] = hunks
         view.run_command("sublimegit_replace_text", {"text": text})
         _tint(view, rows, binary, is_old_side=(role == "old"))
 
@@ -125,6 +129,48 @@ def _tint(view, rows, binary, is_old_side):
         by_scope.setdefault(scope, []).append(view.full_line(start))
     for scope, regions in by_scope.items():
         view.add_regions("sg-rows:" + scope, regions, scope)
+
+
+def navigate(view, direction):
+    """Jump to the previous/next change block (j / k in the diff view).
+
+    The reference is the first visible row, not the caret: manual scrolling
+    moves the viewport while the caret stays behind, and the keys must follow
+    what is on screen. A jump puts the target's first row exactly at the top
+    and drops the caret there, so the same rule keeps making progress
+    (start == visible top → next skips this block, prev takes the one before
+    it). Only the focused pane is scrolled — _ScrollSync mirrors y to the
+    sibling, and both panes render the same aligned row list, so alignment
+    holds. text_to_layout returns an (x, y) tuple, not a Point.
+    """
+    window = view.window()
+    if not window:
+        return
+    hunks = common.state(view).get("hunks") or []
+    if not hunks:
+        window.status_message("SublimeGit: no changes in this diff")
+        return
+    top = view.rowcol(view.visible_region().begin())[0]
+    target = None
+    if direction == "prev":
+        for start, end in hunks:
+            if end <= top:
+                target = start
+        label = "previous"
+    else:
+        for start, end in hunks:
+            if start > top:
+                target = start
+                break
+        label = "next"
+    if target is None:
+        window.status_message("SublimeGit: no {} change".format(label))
+        return
+    x, _ = view.viewport_position()
+    y = max(0.0, view.text_to_layout(view.text_point(target, 0))[1])
+    view.set_viewport_position((x, y))
+    view.sel().clear()
+    view.sel().add(sublime.Region(view.text_point(target, 0)))
 
 
 _SCROLL_SYNC = {}  # window id -> the active _ScrollSync for that window

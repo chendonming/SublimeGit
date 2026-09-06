@@ -219,3 +219,13 @@ class SublimegitReloadDiffCommand(sublime_plugin.TextCommand):
 
     def run(self, edit):
         diff_view.reload_diff(self.view)
+
+
+class SublimegitDiffNavigateCommand(sublime_plugin.TextCommand):
+    """Jump to the previous/next change block (j / k in the diff view)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "diff")
+
+    def run(self, edit, direction="next"):
+        diff_view.navigate(self.view, direction)

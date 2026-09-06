@@ -74,6 +74,7 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 | `b` | Git Panel | quick panel 选择并切换本地分支（当前分支标 `*`，最近提交的排前面） |
 | `r` | Git Panel / Timeline | 刷新 |
 | `m` | Timeline | 加载下一页提交（默认 100/页） |
+| `j` / `k` | Diff 视图 | 跳到下一个 / 上一个修改块 |
 | `esc` | Diff 视图 | 关闭 Diff，恢复布局 |
 
 快捷键思路与 yazi 一致：小写键做无副作用的操作（勾选、全选、pull 进来），
@@ -84,6 +85,9 @@ Diff 视图的颜色来自 color scheme 的 diff scopes
 Mariana、Monokai、Dracula 等常见主题天然支持，无需额外配色配置。
 左右两栏滚动自动同步：两边按对齐后的 diff 行 1:1 对应，滚动任意一侧另一侧跟随
 （Sublime 没有滚动事件，靠 diff 打开期间的轻量轮询实现，关掉 Diff 即停止）。
+`j` 跳到下一个修改块、`k` 跳到上一个：以第一个可见行为基准（手动滚动后再按
+也符合直觉），目标块首行滚到视口顶部并落下光标，两侧窗格一起跳；连续相邻的
+增删改算同一个修改块，到头时状态栏提示。
 
 ### 交互式提交
 

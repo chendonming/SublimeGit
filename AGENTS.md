@@ -86,6 +86,19 @@ Packages). Feature docs live in README.md.
   layout space but not buffer positions, so all row/col math is unaffected.
   The Undo button is drawn dim while HEAD is on a remote (derived from
   `state["sample"]` being empty — sample non-empty implies HEAD unpushed).
+- **Diff hunk navigation is keyboard-only (`j` next / `k` prev →
+  `sublimegit_diff_navigate`)** — phantom buttons were tried first and
+  removed: phantoms anchor to buffer positions and scroll away with the
+  content, and Sublime offers no viewport-fixed UI a plugin could pin them
+  to. Hunk spans (buffer rows, end-exclusive, `HEADER_ROWS`-offset) are
+  computed by `core.diff_engine.hunks` at render time and cached in
+  `state["hunks"]` on BOTH panes. `navigate` measures from the first visible
+  row, not the caret (manual scrolling moves the viewport, not the caret),
+  and jumps a hunk's first row exactly to the viewport top with the caret
+  dropped there — that equality is what lets repeated j/k keep making
+  progress (start == top → next skips this hunk, prev takes the one before).
+  Only the focused pane is scrolled; `_ScrollSync` mirrors it to the sibling.
+  `view.text_to_layout()` returns an `(x, y)` tuple, not a Point.
 - **`set_layout` cells are index tuples into `cols`/`rows`** — each cell is
   `[col_start, row_start, col_end, row_end]` as *indices*, not fractions. A cell
   whose bottom is `0` with `rows: [0.0, 1.0]` is a zero-height group and blanks

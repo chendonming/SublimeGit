@@ -66,3 +66,22 @@ def align(old_text, new_text):
             for k in range(j1, j2):
                 rows.append(("insert", None, new_lines[k]))
     return rows
+
+
+def hunks(rows):
+    """Spans (start, end — end exclusive) of contiguous changed rows.
+
+    Input is align() output in order; the indices refer to that same list, so
+    the caller offsets them however it numbers its buffer lines. Adjacent
+    changed rows (a replace padded with deletes/inserts, for example) merge
+    into one span — they read as a single change block on screen.
+    """
+    spans = []
+    for i, (tag, _old, _new) in enumerate(rows):
+        if tag == "equal":
+            continue
+        if spans and spans[-1][1] == i:
+            spans[-1] = (spans[-1][0], i + 1)
+        else:
+            spans.append((i, i + 1))
+    return spans

@@ -7,7 +7,7 @@ if "sublime" not in sys.modules:
     sys.path.insert(0, os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.abspath(__file__)))))
 
-from SublimeGit.core.diff_engine import align, split_lines
+from SublimeGit.core.diff_engine import align, hunks, split_lines
 
 
 class SplitLinesTest(unittest.TestCase):
@@ -55,6 +55,33 @@ class AlignTest(unittest.TestCase):
 
     def test_both_empty(self):
         self.assertEqual(align("", ""), [])
+
+
+class HunksTest(unittest.TestCase):
+    def test_no_changes(self):
+        self.assertEqual(hunks(align("a\nb\n", "a\nb\n")), [])
+
+    def test_single_change(self):
+        rows = align("a\nold\n", "a\nnew\n")
+        self.assertEqual(hunks(rows), [(1, 2)])
+
+    def test_adjacent_changed_rows_merge(self):
+        # replace padded with an insert reads as one block on screen
+        rows = align("1\n2\n3\n", "1\nx\ny\nz\n")
+        self.assertEqual([r[0] for r in rows],
+                         ["equal", "replace", "replace", "insert"])
+        self.assertEqual(hunks(rows), [(1, 4)])
+
+    def test_separate_blocks(self):
+        rows = align("a\nb\nc\nd\n", "a\nX\nc\nY\n")
+        self.assertEqual(hunks(rows), [(1, 2), (3, 4)])
+
+    def test_delete_and_insert_are_hunks(self):
+        self.assertEqual(hunks(align("a\ngone\n", "a\n")), [(1, 2)])
+        self.assertEqual(hunks(align("a\n", "a\nnew\n")), [(1, 2)])
+
+    def test_empty_rows(self):
+        self.assertEqual(hunks([]), [])
 
 
 if __name__ == "__main__":
