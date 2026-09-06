@@ -266,9 +266,16 @@ class PushPullTest(unittest.TestCase):
             with self.assertRaises(git_runner.GitError):
                 repo_mod.Repository("/r").push()
 
-    def test_pull_is_fast_forward_only(self):
+    def test_pull_defaults_to_rebase(self):
         calls, patcher = self._patched()
         with patcher:
+            repo_mod.Repository("/r").pull()
+        self.assertIn(["pull", "--rebase"], calls)
+
+    def test_pull_ff_only_when_configured(self):
+        calls, patcher = self._patched()
+        with patcher, mock.patch.object(git_runner, "get_setting",
+                                        lambda name, default=None: "ff-only"):
             repo_mod.Repository("/r").pull()
         self.assertIn(["pull", "--ff-only"], calls)
 
@@ -342,7 +349,7 @@ class FriendlyErrorTest(unittest.TestCase):
     def test_ff_only_refusal(self):
         e = git_runner.GitError(["pull"], 1,
                                 "fatal: Not possible to fast-forward, aborting.")
-        self.assertIn("fast-forward", friendly_error(e))
+        self.assertIn("diverged", friendly_error(e))
 
     def test_credential_failure(self):
         e = git_runner.GitError(["push"], 128,
@@ -353,6 +360,104 @@ class FriendlyErrorTest(unittest.TestCase):
     def test_fallback_uses_last_stderr_line(self):
         e = git_runner.GitError(["status"], 128, "hint: a\nfatal: bad object HEAD")
         self.assertEqual(friendly_error(e), "fatal: bad object HEAD")
+
+
+class UndoCommitTest(unittest.TestCase):
+    """Repository.undo_last_commit argv decisions, git subprocesses mocked."""
+
+    def _patched(self, head=b"1" * 40 + b"\n", unpushed=b"1" * 40 + b"\n",
+                 has_parent=True):
+        calls = []
+
+        def fake_run_sync(cwd, args, timeout=None):
+            calls.append(args)
+            if args == ["rev-parse", "HEAD"]:
+                return 0, head, b""
+            if args == ["rev-list", "HEAD", "--not", "--remotes"]:
+                return 0, unpushed, b""
+            if args == ["rev-parse", "HEAD~1"]:
+                return (0 if has_parent else 1), b"", b""
+            if args[0] in ("reset", "update-ref"):
+                return 0, b"", b""
+            return 0, b"", b""
+
+        patcher = mock.patch("SublimeGit.core.git_runner.run_sync", fake_run_sync)
+        return calls, patcher
+
+    def test_undo_soft_resets_to_parent(self):
+        calls, patcher = self._patched()
+        with patcher:
+            repo_mod.Repository("/r").undo_last_commit()
+        self.assertIn(["reset", "--soft", "HEAD~1"], calls)
+
+    def test_undo_root_commit_deletes_branch_ref(self):
+        calls, patcher = self._patched(has_parent=False)
+        with patcher:
+            repo_mod.Repository("/r").undo_last_commit()
+        self.assertIn(["update-ref", "-d", "HEAD"], calls)
+
+    def test_undo_refuses_pushed_head(self):
+        calls, patcher = self._patched(unpushed=b"")
+        with patcher:
+            with self.assertRaises(git_runner.GitError):
+                repo_mod.Repository("/r").undo_last_commit()
+        self.assertNotIn(["reset", "--soft", "HEAD~1"], calls)
+
+    def test_undo_refuses_unborn_head(self):
+        calls, patcher = self._patched(head=b"")
+        with patcher:
+            with self.assertRaises(git_runner.GitError):
+                repo_mod.Repository("/r").undo_last_commit()
+
+
+class StageUnstageTest(unittest.TestCase):
+    """Repository.stage_files / unstage_files argv decisions."""
+
+    def _patched(self, head=b"1" * 40 + b"\n"):
+        calls = []
+
+        def fake_run_ok(cwd, args, timeout=None):
+            calls.append(args)
+            return b""
+
+        def fake_run_sync(cwd, args, timeout=None):
+            if args == ["rev-parse", "HEAD"]:
+                return 0, head, b""
+            return 0, b"", b""
+
+        p1 = mock.patch("SublimeGit.core.git_runner.run_ok", fake_run_ok)
+        p2 = mock.patch("SublimeGit.core.git_runner.run_sync", fake_run_sync)
+        return calls, p1, p2
+
+    def test_stage_runs_add_dash_a(self):
+        calls, p1, p2 = self._patched()
+        with p1, p2:
+            repo_mod.Repository("/r").stage_files(["a.py"])
+        self.assertIn(["add", "-A", "--", "a.py"], calls)
+
+    def test_unstage_uses_reset_head(self):
+        calls, p1, p2 = self._patched()
+        with p1, p2:
+            repo_mod.Repository("/r").unstage_files(["a.py"])
+        self.assertIn(["reset", "HEAD", "--", "a.py"], calls)
+
+    def test_unstage_rename_covers_both_paths(self):
+        calls, p1, p2 = self._patched()
+        with p1, p2:
+            repo_mod.Repository("/r").unstage_files(["new.py", "old.py"])
+        self.assertIn(["reset", "HEAD", "--", "new.py", "old.py"], calls)
+
+    def test_unstage_on_unborn_branch_removes_from_index(self):
+        calls, p1, p2 = self._patched(head=b"")
+        with p1, p2:
+            repo_mod.Repository("/r").unstage_files(["a.py"])
+        self.assertIn(["rm", "--cached", "--", "a.py"], calls)
+
+    def test_unstage_with_empty_paths_is_a_noop(self):
+        calls, p1, p2 = self._patched()
+        with p1, p2:
+            repo_mod.Repository("/r").unstage_files([])
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

@@ -150,6 +150,28 @@ class SublimegitPullCommand(sublime_plugin.TextCommand):
         changes_panel.pull(self.view)
 
 
+class SublimegitStageToggleCommand(sublime_plugin.TextCommand):
+    """Stage/unstage the file under the cursor (s in the Changes view)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "changes")
+
+    def run(self, edit):
+        sels = self.view.sel()
+        row = self.view.rowcol(sels[0].begin())[0] if sels else 0
+        changes_panel.stage_toggle_at_row(self.view, row)
+
+
+class SublimegitUndoCommitCommand(sublime_plugin.TextCommand):
+    """Undo the newest unpushed commit, soft reset (u in the Changes view)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "changes")
+
+    def run(self, edit):
+        changes_panel.undo_commit(self.view)
+
+
 class SublimegitLoadMoreCommand(sublime_plugin.TextCommand):
     """Load the next page of commits (`m` in the Timeline view)."""
 

@@ -97,9 +97,14 @@ def friendly_error(e):
     if "non-fast-forward" in low or "rejected" in low:
         return ("rejected — the remote has commits you don't have; run "
                 "`git pull` in a terminal (merge/rebase if diverged), then push again")
+    if "conflict" in low or "could not apply" in low:
+        return ("pull stopped on rebase conflicts — resolve them in a terminal "
+                "(`git rebase --continue` / `--abort`)")
+    if "rebase-merge" in low or "rebase in progress" in low:
+        return "a rebase is already in progress — finish it in a terminal first"
     if "not possible to fast-forward" in low:
         return ("diverged from upstream — a merge is needed; resolve it in a "
-                "terminal (pull here is fast-forward-only)")
+                "terminal, or set \"pull_mode\": \"rebase\" in the settings")
     if "would be overwritten by merge" in low:
         return "pull would overwrite local changes — commit or stash them first"
     if "detached head" in low:

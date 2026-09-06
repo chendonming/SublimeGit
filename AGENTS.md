@@ -32,12 +32,23 @@ Packages). Feature docs live in README.md.
   A new async operation must follow this pattern — status-bar/console-only errors
   are a bug the user explicitly rejected.
 - **Panel views are scratch + read-only; git runs read-only with
-  `GIT_OPTIONAL_LOCKS=0`** — except three explicit write paths reached only
+  `GIT_OPTIONAL_LOCKS=0`** — except five explicit write paths reached only
   from user action in the Changes panel: the commit flow
-  (`Repository.stage_files` + `Repository.commit`), `Repository.push` (adds
-  `-u <first-remote> <branch>` when the branch has no upstream), and
-  `Repository.pull`, deliberately `--ff-only` — the plugin never starts a
-  merge, rebase, or conflict state on its own. Network ops use the
+  (`Repository.stage_files` + `Repository.commit`), per-row staging (the `s`
+  key: `Repository.stage_files` for unstaged/untracked rows,
+  `Repository.unstage_files` = `reset HEAD -- <paths>` for staged rows, or
+  `rm --cached` on an unborn branch — index-only, the worktree is never
+  touched; rename rows must pass old and new path),
+  `Repository.push` (adds
+  `-u <first-remote> <branch>` when the branch has no upstream),
+  `Repository.pull`, whose mode comes from the `pull_mode` setting —
+  `"rebase"` (default, `git pull --rebase`) or `"ff-only"`; rebase pull is
+  user-chosen: on conflicts it leaves the repo mid-rebase, surfaced by the
+  in-panel error banner pointing at `git rebase --continue/--abort`, and
+  plain merge is still never offered — and `Repository.undo_last_commit`
+  (soft `reset --soft HEAD~1`, refused when HEAD is reachable from any
+  remote; the parentless root commit goes through `update-ref -d HEAD`).
+  Network ops use the
   `git_network_timeout` setting (default 120s, not `git_timeout`), and
   `GIT_TERMINAL_PROMPT=0` makes missing credentials fail fast instead of
   hanging a worker thread. Working-tree files are never touched except by a
@@ -46,9 +57,11 @@ Packages). Feature docs live in README.md.
   `paths_to_stage` skips staged rows (adding the worktree copy could stage
   unseen changes), and callers must pass a non-empty path list — a bare
   `git add -A --` stages the whole tree.
-- **The Changes panel's Push/Pull toolbar is a `LAYOUT_BLOCK` phantom pinned
+- **The Changes panel's Push/Pull/Undo toolbar is a `LAYOUT_BLOCK` phantom pinned
   at Region(0, 0)**, erased and re-added on every render. Phantoms occupy
   layout space but not buffer positions, so all row/col math is unaffected.
+  The Undo button is drawn dim while HEAD is on a remote (derived from
+  `state["sample"]` being empty — sample non-empty implies HEAD unpushed).
 - **`set_layout` cells are index tuples into `cols`/`rows`** — each cell is
   `[col_start, row_start, col_end, row_end]` as *indices*, not fractions. A cell
   whose bottom is `0` with `rows: [0.0, 1.0]` is a zero-height group and blanks

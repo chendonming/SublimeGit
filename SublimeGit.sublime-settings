@@ -5,6 +5,9 @@
     "git_timeout": 20,
     // Seconds before a network git subprocess (push / pull) is killed
     "git_network_timeout": 120,
+    // Pull mode for the Changes panel's Pull action:
+    // "rebase" -> git pull --rebase (default); "ff-only" -> refuses divergence
+    "pull_mode": "rebase",
     // Commits loaded per page in the Git Timeline
     "log_page_size": 100,
     // Max commits listed by Git: File History

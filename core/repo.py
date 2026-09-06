@@ -42,6 +42,11 @@ class Repository:
             return "?"
         return out.decode("utf-8", "replace").strip() or "?"
 
+    def head(self):
+        """Full sha of HEAD, or "" when HEAD is unborn."""
+        rc, out, _ = git_runner.run_sync(self.root, ["rev-parse", "HEAD"])
+        return out.decode("utf-8", "replace").strip() if rc == 0 else ""
+
     def head_short(self):
         rc, out, _ = git_runner.run_sync(self.root, ["rev-parse", "--short", "HEAD"])
         if rc != 0:
@@ -170,8 +175,8 @@ class Repository:
 
     # -- push & pull -------------------------------------------------------
     # Explicit network write paths, reached only from the Changes panel's
-    # Push/Pull actions. pull is deliberately --ff-only: the plugin never
-    # starts a merge, rebase, or conflict state on its own.
+    # Push/Pull actions. pull's mode comes from the `pull_mode` setting
+    # ("rebase" default / "ff-only"); plain merge is never offered.
 
     def push(self):
         """Push the current branch; -u <first-remote> on the first push."""
@@ -184,7 +189,9 @@ class Repository:
         return self._run_network(args)
 
     def pull(self):
-        """Fast-forward-only pull of the current branch's upstream."""
+        """Pull the current branch's upstream. Mode from the `pull_mode`
+        setting: "rebase" (default) runs `git pull --rebase`; "ff-only"
+        runs `git pull --ff-only` and refuses a divergence."""
         branch = self._branch_for_sync("pull")
         rc, _, _ = git_runner.run_sync(
             self.root, ["rev-parse", "--abbrev-ref", branch + "@{upstream}"])
@@ -192,14 +199,32 @@ class Repository:
             raise git_runner.GitError(
                 ["pull"], 1,
                 "branch '{}' has no upstream to pull from".format(branch))
-        return self._run_network(["pull", "--ff-only"])
+        mode = git_runner.get_setting("pull_mode", "rebase")
+        flag = "--rebase" if mode == "rebase" else "--ff-only"
+        return self._run_network(["pull", flag])
 
     def _branch_for_sync(self, op):
         branch = self.current_branch()
         if branch in ("", "?", "HEAD"):
+            if self._rebase_in_progress():
+                raise git_runner.GitError(
+                    [op], 1,
+                    "a rebase is in progress — finish it with "
+                    "`git rebase --continue` or `--abort` in a terminal")
             raise git_runner.GitError(
                 [op], 1, "detached HEAD — check out a branch first")
         return branch
+
+    def _rebase_in_progress(self):
+        """True while a rebase (merge or apply backend) is mid-flight."""
+        for name in ("rebase-merge", "rebase-apply"):
+            rc, out, _ = git_runner.run_sync(
+                self.root, ["rev-parse", "--git-path", name])
+            if rc == 0:
+                path = out.decode("utf-8", "replace").strip()
+                if path and os.path.exists(os.path.join(self.root, path)):
+                    return True
+        return False
 
     def _default_remote(self):
         rc, out, _ = git_runner.run_sync(self.root, ["remote"])
@@ -219,6 +244,32 @@ class Repository:
                  in (out + err).decode("utf-8", "replace").splitlines() if ln.strip()]
         return lines[-1] if lines else "done"
 
+    # -- undo last commit --------------------------------------------------
+    # Local history write path for the Changes panel's Undo action. Soft
+    # reset only: the commit disappears, its changes stay in the index.
+
+    def undo_last_commit(self):
+        """Drop the newest commit, keeping its changes staged.
+
+        Refuses when HEAD is reachable from a remote — undoing a pushed
+        commit would rewrite published history. The root commit has no
+        parent, so it is undone with `update-ref -d HEAD` (the branch goes
+        back to unborn, the index keeps everything staged).
+        """
+        head = self.head()
+        if not head:
+            raise git_runner.GitError(["reset"], 1, "no commits to undo")
+        if head not in self.unpushed():
+            raise git_runner.GitError(
+                ["reset"], 1,
+                "HEAD is already on the remote — undoing it would rewrite pushed history")
+        rc, _, _ = git_runner.run_sync(self.root, ["rev-parse", "HEAD~1"])
+        args = ["reset", "--soft", "HEAD~1"] if rc == 0 else ["update-ref", "-d", "HEAD"]
+        rc, out, err = git_runner.run_sync(self.root, args)
+        if rc != 0:
+            raise git_runner.GitError(args, rc, err.decode("utf-8", "replace"))
+        return args
+
     # -- staging & commit --------------------------------------------------
     # The plugin's explicit commit write path, reached solely from the
     # commit flow in the Changes panel; everything else stays read-only.
@@ -226,6 +277,21 @@ class Repository:
     def stage_files(self, paths):
         """`git add -A --` the named paths: stages adds/mods/deletes/renames."""
         git_runner.run_ok(self.root, ["add", "-A", "--"] + list(paths))
+
+    def unstage_files(self, paths):
+        """Restore the index entries of paths to HEAD (`git reset HEAD --`).
+
+        Index-only: the working tree is never touched. On an unborn branch
+        there is no HEAD to reset to, so the staged adds are removed with
+        `git rm --cached` instead (the files become untracked).
+        """
+        paths = list(paths)
+        if not paths:
+            return
+        if self.head():
+            git_runner.run_ok(self.root, ["reset", "HEAD", "--"] + paths)
+        else:
+            git_runner.run_ok(self.root, ["rm", "--cached", "--"] + paths)
 
     def commit(self, message):
         """Commit the current index; returns the raw git output (short sha line)."""

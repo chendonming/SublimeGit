@@ -5,5 +5,7 @@
     { "caption": "Git: Refresh Panel", "command": "sublimegit_refresh_view" },
     { "caption": "Git: Close Diff", "command": "sublimegit_close_diff" },
     { "caption": "Git: Push", "command": "sublimegit_push" },
-    { "caption": "Git: Pull (fast-forward only)", "command": "sublimegit_pull" }
+    { "caption": "Git: Stage/Unstage File (cursor row)", "command": "sublimegit_stage_toggle" },
+    { "caption": "Git: Undo Last Commit", "command": "sublimegit_undo_commit" },
+    { "caption": "Git: Pull (pull_mode: rebase / ff-only)", "command": "sublimegit_pull" }
 ]

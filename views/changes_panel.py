@@ -7,11 +7,16 @@ Checkboxes mean "selected for the next operation" and stay separate from git's
 staged/unstaged split. Diff refs are VS Code-style: staged = HEAD vs INDEX,
 unstaged = INDEX vs WORKTREE.
 
-A phantom toolbar at the top of the panel holds the Push and Pull buttons
-(⌘⇧K / ⌘⌥P; pull is fast-forward-only). The header shows the upstream with
-↑ahead / ↓behind, and an OUTGOING section lists local commits no
-remote-tracking ref contains yet — Enter on one of those rows opens its
-changed-file list.
+`s` on a file row stages it (unstaged/untracked rows) or unstages it (staged
+rows) — an index-only operation, the working tree is never touched.
+
+A phantom toolbar at the top of the panel holds the Push, Pull and Undo
+buttons (⌘⇧K / ⌘⌥P / u; the pull mode comes from the `pull_mode` setting —
+rebase by default, ff-only optional — and the button label shows which is
+active). The header shows the upstream with ↑ahead / ↓behind, and an OUTGOING
+section lists local commits no remote-tracking ref contains yet — Enter on
+one of those rows opens its changed-file list. Undo soft-resets the newest
+unpushed commit (changes return to STAGED; refused once HEAD is on a remote).
 
 Background failures (refresh / push / pull / commit) render as a red banner
 inside the panel, with the raw git stderr below the short message — the
@@ -41,18 +46,24 @@ LETTER_COL = 5
 CHECK_SCOPE = "markup.inserted.diff"
 OUTGOING_MAX = 8  # outgoing commits listed inline; the rest stay in Timeline
 TOOLBAR_KEY = "sg-toolbar"
-TOOLBAR_HTML = (
-    '<div style="padding: 0 0 8px 8px;">'
-    '<a href="push" style="color: var(--foreground); '
-    'border: 1px solid color(var(--foreground) alpha(0.30)); '
-    'border-radius: 3px; padding: 2px 12px; text-decoration: none;">'
-    "↑ Push</a>"
-    "&nbsp;&nbsp;&nbsp;"
-    '<a href="pull" style="color: var(--foreground); '
-    'border: 1px solid color(var(--foreground) alpha(0.30)); '
-    'border-radius: 3px; padding: 2px 12px; text-decoration: none;">'
-    "↓ Pull</a>"
-    "</div>")
+TOOLBAR_BTN = ('<a href="{href}" style="border: 1px solid '
+               'color(var(--foreground) alpha(0.30)); border-radius: 3px; '
+               'padding: 2px 12px; text-decoration: none; {style}">'
+               "{label}</a>")
+
+
+def _toolbar_html(can_undo):
+    mode = git_runner.get_setting("pull_mode", "rebase")
+    pull_label = "↓ Pull·rebase" if mode == "rebase" else "↓ Pull·ff-only"
+    # {style} sits last so the dim color overrides the anchor's color below
+    dim = "color: color(var(--foreground) alpha(0.35));" if not can_undo else ""
+    return ('<div style="padding: 0 0 8px 8px;">'
+            + TOOLBAR_BTN.format(href="push", label="↑ Push", style="color: var(--foreground);")
+            + "&nbsp;&nbsp;"
+            + TOOLBAR_BTN.format(href="pull", label=pull_label, style="color: var(--foreground);")
+            + "&nbsp;&nbsp;"
+            + TOOLBAR_BTN.format(href="undo", label="↩ Undo", style=dim or "color: var(--foreground);")
+            + "</div>")
 
 
 def open_changes(window):
@@ -209,7 +220,7 @@ def _render(view, branch, files, has_remote=False, unpushed=frozenset(), sample=
     if not rows and not err:
         header_rows.append(emit("  ✓ working tree clean"))
     emit("")
-    emit("  space select · a all · ⏎ open · ⌘⏎ commit · ⌘⇧K push · ⌘⌥P pull · r refresh")
+    emit("  space select · s stage/unstage · a all · ⏎ open · ⌘⏎ commit · u undo · ⌘⇧K push · ⌘⌥P pull · r refresh")
 
     view.run_command("sublimegit_replace_text", {"text": "\n".join(lines) + "\n"})
     _render_toolbar(view)
@@ -250,9 +261,10 @@ def _render(view, branch, files, has_remote=False, unpushed=frozenset(), sample=
 
 
 def _render_toolbar(view):
-    """Push/Pull buttons as a block phantom pinned above the header line."""
+    """Push/Pull/Undo buttons as a block phantom pinned above the header line."""
     view.erase_phantoms(TOOLBAR_KEY)
-    view.add_phantom(TOOLBAR_KEY, sublime.Region(0, 0), TOOLBAR_HTML,
+    can_undo = bool(common.state(view).get("sample"))  # newest unpushed == HEAD
+    view.add_phantom(TOOLBAR_KEY, sublime.Region(0, 0), _toolbar_html(can_undo),
                      sublime.LAYOUT_BLOCK,
                      lambda href: _on_toolbar(view, href))
 
@@ -264,6 +276,8 @@ def _on_toolbar(view, href):
         push(view)
     elif href == "pull":
         pull(view)
+    elif href == "undo":
+        undo_commit(view)
 
 
 def open_at_row(view, row):
@@ -354,6 +368,71 @@ def _rerender(view):
     view.sel().add(sublime.Region(view.text_point(row, LETTER_COL)))
 
 
+def stage_toggle_at_row(view, row):
+    """`s` on a file row: stage an unstaged/untracked file, unstage a staged
+    one — the row's group declares the intent. Index-only, never touches the
+    working tree; renames cover old and new path."""
+    st = common.state(view)
+    f = st.get("rows", {}).get(row)
+    window = view.window()
+    root = st.get("root")
+    if f is None:
+        view.set_status("sublimegit", "move the cursor to a file line, then press s")
+        return
+    if not window or not root:
+        view.set_status("sublimegit", "SublimeGit: no repository bound to this panel")
+        return
+    if st.get("syncing"):
+        view.set_status("sublimegit",
+                        "SublimeGit: {} already in progress".format(st["syncing"]))
+        return
+    if f.where == "staged":
+        op = "unstage"
+        paths = [f.path] + ([f.old_path] if f.old_path else [])
+    else:
+        op = "stage"
+        paths = paths_to_stage([f])
+    st["syncing"] = op
+    view.set_status("sublimegit", "SublimeGit: {}ing {}…".format(op, f.path))
+
+    def work():
+        repo = repo_mod.Repository(root)
+        if op == "stage":
+            repo.stage_files(paths)
+        else:
+            repo.unstage_files(paths)
+
+    def done(_):
+        st.pop("syncing", None)
+        if view.is_valid():
+            refresh(view, on_done=lambda: _refocus(
+                view, f.path, "staged" if op == "stage" else "unstaged"))
+
+    def err(e):
+        st.pop("syncing", None)
+        if view.is_valid():
+            _show_error(view, e)
+
+    git_runner.run_bg(work, done, err)
+
+
+def _refocus(view, path, prefer_where):
+    """Put the caret on `path`'s row after the async re-render moved it."""
+    rows = common.state(view).get("rows", {})
+    target = None
+    for row in sorted(rows):
+        f = rows[row]
+        if f.path == path:
+            if f.where == prefer_where:
+                target = row
+                break
+            if target is None:
+                target = row
+    if target is not None:
+        view.sel().clear()
+        view.sel().add(sublime.Region(view.text_point(target, LETTER_COL)))
+
+
 def push(view):
     _sync(view, "push", "pushing")
 
@@ -404,6 +483,54 @@ def _show_error(view, e):
         _rerender(view)
     else:
         _render(view, None, [], False, frozenset(), ())
+
+
+def undo_commit(view):
+    """Undo the newest commit — only while it is unpushed (soft reset).
+
+    The newest entry of the OUTGOING sample is HEAD by construction: if HEAD
+    were reachable from a remote, every ancestor would be too and the sample
+    would be empty. Repository.undo_last_commit re-validates at run time.
+    """
+    st = common.state(view)
+    window = view.window()
+    root = st.get("root")
+    sample = st.get("sample") or []
+    if not window or not root:
+        view.set_status("sublimegit", "SublimeGit: no repository bound to this panel")
+        return
+    if not sample:
+        view.set_status("sublimegit",
+                        "nothing to undo — the newest commit is already on the remote")
+        return
+    if st.get("syncing"):
+        view.set_status("sublimegit",
+                        "SublimeGit: {} already in progress".format(st["syncing"]))
+        return
+    head = sample[0]
+    if not sublime.ok_cancel_dialog(
+            "Undo commit {} — {}?\n\nIts changes return to the STAGED list; "
+            "nothing is deleted.".format(head.short, head.title), "Undo"):
+        return
+    st["syncing"] = "undo"
+    view.set_status("sublimegit", "SublimeGit: undoing {}…".format(head.short))
+
+    def work():
+        repo_mod.Repository(root).undo_last_commit()
+
+    def done(_):
+        st.pop("syncing", None)
+        if view.is_valid():
+            refresh(view)
+        window.status_message(
+            "SublimeGit: undid {} — changes are back in STAGED".format(head.short))
+
+    def err(e):
+        st.pop("syncing", None)
+        if view.is_valid():
+            _show_error(view, e)
+
+    git_runner.run_bg(work, done, err)
 
 
 def commit_selected(view):
@@ -470,6 +597,9 @@ def show_hint(view):
     f = st.get("rows", {}).get(row)
     if f:
         mark = CHECK_ON if _key(f) in st.get("selected", set()) else CHECK_OFF
-        view.set_status("sublimegit", "{} {} · space toggle · ⏎ diff".format(mark, f.display_path))
+        action = "unstage" if f.where == "staged" else "stage"
+        view.set_status("sublimegit",
+                        "{} {} · space toggle · s {} · ⏎ diff".format(
+                            mark, f.display_path, action))
     else:
         view.set_status("sublimegit", "space select · ⏎ open · ⌘⇧K push · ⌘⌥P pull · r refresh")
