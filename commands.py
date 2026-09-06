@@ -68,7 +68,7 @@ class SublimegitRefreshViewCommand(sublime_plugin.TextCommand):
     def is_enabled(self):
         return common.kind(self.view) in ("changes", "timeline")
 
-    def run(self):
+    def run(self, edit):
         k = common.kind(self.view)
         if k == "changes":
             changes_panel.refresh(self.view)
@@ -82,7 +82,7 @@ class SublimegitOpenSelectionCommand(sublime_plugin.TextCommand):
     def is_enabled(self):
         return common.kind(self.view) in ("changes", "timeline")
 
-    def run(self):
+    def run(self, edit):
         k = common.kind(self.view)
         sels = self.view.sel()
         if k not in ("changes", "timeline") or not sels:
@@ -100,7 +100,7 @@ class SublimegitLoadMoreCommand(sublime_plugin.TextCommand):
     def is_enabled(self):
         return common.kind(self.view) == "timeline"
 
-    def run(self):
+    def run(self, edit):
         timeline_panel.load_more(self.view)
 
 
@@ -110,5 +110,5 @@ class SublimegitReloadDiffCommand(sublime_plugin.TextCommand):
     def is_enabled(self):
         return common.is_kind(self.view, "diff")
 
-    def run(self):
+    def run(self, edit):
         diff_view.reload_diff(self.view)
