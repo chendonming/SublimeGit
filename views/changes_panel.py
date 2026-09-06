@@ -761,7 +761,7 @@ def show_hint(view):
         return
     if st.get("root_row") == row:
         view.set_status("sublimegit",
-                        "ALL — space selects/deselects everything · a all · shift+a none")
+                        "ALL — space selects/deselects everything · a all · A none")
         return
     f = st.get("rows", {}).get(row)
     if f:
@@ -769,4 +769,4 @@ def show_hint(view):
         view.set_status("sublimegit",
                         "{} {} · space toggle · ⏎ diff".format(mark, f.display_path))
     else:
-        view.set_status("sublimegit", "space select · ⏎ open · ⌘⇧K push · ⌘⌥P pull · r refresh")
+        view.set_status("sublimegit", "space select · ⏎ open · P push · p pull · r refresh")

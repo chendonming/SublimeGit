@@ -21,6 +21,14 @@ Packages). Feature docs live in README.md.
   `views/common.configure_panel` and re-asserted at the top of each panel's
   `refresh()`, so panels restored from an older session self-heal on activation.
   Dotted setting names such as `setting.sublimegit.view` do not match keymap contexts.
+- **Bind shift+letter as the uppercase character (`["P"]`), never `["shift+p"]`** —
+  ST4 names the key event by the character shift produces, so `"shift+p"` never
+  matches and the keypress silently falls through to text insertion (a no-op on a
+  read-only panel). Verified against the bundled packages: Vintage binds every
+  shifted letter in uppercase form and no official package uses `"shift+[a-z]"`.
+  Plain-char input goes through the keymap under the same name, so `"P"` matches
+  both real shift+P and pasted/typed `P`. Chords whose primary modifier isn't
+  shift (`super+shift+k`, `ctrl+shift+k`) keep the modifier form.
 - **Rendering goes through `SublimegitReplaceTextCommand`**, which resets the
   selection to a caret at (0, 0) after replacing the buffer — `view.replace()` alone
   maps the old selection onto the new text, leaving the whole buffer selected and
