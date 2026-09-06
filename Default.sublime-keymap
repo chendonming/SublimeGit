@@ -31,6 +31,8 @@
       "context": [{ "key": "setting.sublimegit_changes" }] },
     { "keys": ["ctrl+alt+p"], "command": "sublimegit_pull",
       "context": [{ "key": "setting.sublimegit_changes" }] },
+    { "keys": ["b"], "command": "sublimegit_switch_branch",
+      "context": [{ "key": "setting.sublimegit_changes" }] },
     { "keys": ["r"], "command": "sublimegit_refresh_view",
       "context": [{ "key": "setting.sublimegit_changes" }] },
     { "keys": ["r"], "command": "sublimegit_refresh_view",

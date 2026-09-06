@@ -1,4 +1,4 @@
-"""Git Changes panel.
+"""Git Panel — the plugin's main panel (view title "Git Panel").
 
 Lists staged / unstaged / untracked files in a scratch view, one checkbox per
 file row (space toggles it). Enter or a double-click opens the side-by-side
@@ -14,14 +14,18 @@ working tree is never touched. Only rows in the matching group act: staging
 skips staged rows (the index already holds what you see), unstaging skips
 unstaged/untracked rows, so a mixed selection is always safe.
 
-A phantom toolbar at the top of the panel holds the Push, Pull and Undo
-buttons (shift+P / p / u; ⌘⇧K / ⌘⌥P still work; the pull mode comes from
+A phantom toolbar at the top of the panel holds the Push, Pull, Undo and
+Branch buttons (shift+P / p / u / b; ⌘⇧K / ⌘⌥P still work; the pull mode comes
+from
 the `pull_mode` setting —
 rebase by default, ff-only optional — and the button label shows which is
 active). The header shows the upstream with ↑ahead / ↓behind, and an OUTGOING
 section lists local commits no remote-tracking ref contains yet — Enter on
 one of those rows opens its changed-file list. Undo soft-resets the newest
 unpushed commit (changes return to STAGED; refused once HEAD is on a remote).
+`b` lists local branches in a quick panel (current one starred, most recent
+first); picking one checks it out — git refuses when the switch would
+overwrite uncommitted changes and the refusal shows in the panel banner.
 
 Background failures (refresh / push / pull / commit) render as a red banner
 inside the panel, with the raw git stderr below the short message — the
@@ -69,6 +73,8 @@ def _toolbar_html(can_undo):
             + TOOLBAR_BTN.format(href="pull", label=pull_label, style="color: var(--foreground);")
             + "&nbsp;&nbsp;"
             + TOOLBAR_BTN.format(href="undo", label="↩ Undo", style=dim or "color: var(--foreground);")
+            + "&nbsp;&nbsp;"
+            + TOOLBAR_BTN.format(href="branch", label="⎇ Branch", style="color: var(--foreground);")
             + "</div>")
 
 
@@ -87,10 +93,10 @@ def open_changes(window):
 def _ensure_view(window, root):
     for view in window.views():
         if common.is_kind(view, KIND) and common.state(view).get("root") == root:
-            common.configure_panel(view, KIND, "Git Changes")
+            common.configure_panel(view, KIND, "Git Panel")
             return view
     view = window.new_file()
-    common.configure_panel(view, KIND, "Git Changes")
+    common.configure_panel(view, KIND, "Git Panel")
     common.state(view)["root"] = root
     return view
 
@@ -237,7 +243,7 @@ def _render(view, branch, files, has_remote=False, unpushed=frozenset(), sample=
     if not rows and not err:
         header_rows.append(emit("  ✓ working tree clean"))
     emit("")
-    emit("  space select · S stage · s unstage · a/A all/none · ⏎ open · ⌘⏎ commit · P push · p pull · u undo · r refresh")
+    emit("  space select · S stage · s unstage · a/A all/none · ⏎ open · ⌘⏎ commit · P push · p pull · u undo · b branch · r refresh")
 
     view.run_command("sublimegit_replace_text", {"text": "\n".join(lines) + "\n"})
     _render_toolbar(view)
@@ -304,6 +310,8 @@ def _on_toolbar(view, href):
         pull(view)
     elif href == "undo":
         undo_commit(view)
+    elif href == "branch":
+        switch_branch(view)
 
 
 def open_at_row(view, row):
@@ -604,6 +612,83 @@ def undo_commit(view):
             refresh(view)
         window.status_message(
             "SublimeGit: undid {} — changes are back in STAGED".format(head.short))
+
+    def err(e):
+        st.pop("syncing", None)
+        if view.is_valid():
+            _show_error(view, e)
+
+    git_runner.run_bg(work, done, err)
+
+
+def switch_branch(view):
+    """`b` / the ⎇ Branch button: pick a local branch in a quick panel and
+    check it out. The listing runs in the background; the panel stays
+    interactive while it loads. A refused checkout (uncommitted changes in
+    the way) renders the in-panel banner like every other write path."""
+    st = common.state(view)
+    window = view.window()
+    root = st.get("root")
+    if not window or not root:
+        view.set_status("sublimegit", "SublimeGit: no repository bound to this panel")
+        return
+    if st.get("syncing"):
+        view.set_status("sublimegit",
+                        "SublimeGit: {} already in progress".format(st["syncing"]))
+        return
+
+    def work():
+        return repo_mod.Repository(root).branches()
+
+    def done(branches):
+        if not window.is_valid():
+            return
+        if not branches:
+            view.set_status("sublimegit", "SublimeGit: no local branches to switch to")
+            return
+        _show_branch_panel(view, window, root, branches)
+
+    def err(e):
+        if view.is_valid():
+            _show_error(view, e)
+
+    git_runner.run_bg(work, done, err)
+
+
+def _show_branch_panel(view, window, root, branches):
+    entries = ["* {}  {}".format(b.name, b.subject) if b.current
+               else "  {}  {}".format(b.name, b.subject)
+               for b in branches]
+
+    def pick(index):
+        if index < 0:  # esc — show_quick_panel calls back with -1 on cancel
+            return
+        b = branches[index]
+        if b.current:
+            view.set_status("sublimegit", "SublimeGit: already on {}".format(b.name))
+            return
+        _run_checkout(view, window, root, b)
+
+    window.show_quick_panel(entries, pick, sublime.MONOSPACE_FONT)
+
+
+def _run_checkout(view, window, root, b):
+    st = common.state(view)
+    if st.get("syncing"):
+        view.set_status("sublimegit",
+                        "SublimeGit: {} already in progress".format(st["syncing"]))
+        return
+    st["syncing"] = "checkout"
+    view.set_status("sublimegit", "SublimeGit: switching to {}…".format(b.name))
+
+    def work():
+        return repo_mod.Repository(root).checkout(b.name)
+
+    def done(line):
+        st.pop("syncing", None)
+        if view.is_valid():
+            refresh(view)
+        window.status_message("SublimeGit: {} — {}".format(line, b.name))
 
     def err(e):
         st.pop("syncing", None)

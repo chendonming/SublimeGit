@@ -1,5 +1,5 @@
 [
-    { "caption": "Git: Open Changes", "command": "sublimegit_open_changes" },
+    { "caption": "Git: Panel", "command": "sublimegit_open_changes" },
     { "caption": "Git: Open Timeline", "command": "sublimegit_open_timeline" },
     { "caption": "Git: File History", "command": "sublimegit_file_history" },
     { "caption": "Git: Refresh Panel", "command": "sublimegit_refresh_view" },
@@ -10,5 +10,6 @@
     { "caption": "Git: Select All Files", "command": "sublimegit_select_all" },
     { "caption": "Git: Select None", "command": "sublimegit_select_none" },
     { "caption": "Git: Undo Last Commit", "command": "sublimegit_undo_commit" },
+    { "caption": "Git: Switch Branch", "command": "sublimegit_switch_branch" },
     { "caption": "Git: Pull (pull_mode: rebase / ff-only)", "command": "sublimegit_pull" }
 ]

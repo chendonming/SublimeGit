@@ -1,7 +1,9 @@
 # AGENTS.md — SublimeGit
 
 Sublime Text 4 plugin (Python 3.8 host, pinned by `.python-version`). A read-only Git
-UI: Changes panel, Timeline panel, File History quick panel, and a unified
+UI: a Changes panel (user-visible name "Git Panel", command "Git: Panel";
+docs and code keep the "Changes panel" name), a Timeline panel, a File
+History quick panel, and a unified
 side-by-side diff. The repo root IS the package folder `SublimeGit/` (symlinked into
 Packages). Feature docs live in README.md.
 
@@ -32,7 +34,7 @@ Packages). Feature docs live in README.md.
   A new async operation must follow this pattern — status-bar/console-only errors
   are a bug the user explicitly rejected.
 - **Panel views are scratch + read-only; git runs read-only with
-  `GIT_OPTIONAL_LOCKS=0`** — except five explicit write paths reached only
+  `GIT_OPTIONAL_LOCKS=0`** — except six explicit write paths reached only
   from user action in the Changes panel: the commit flow
   (`Repository.stage_files` + `Repository.commit`), selection-based staging
   (`shift+S` = `Repository.stage_files` for the checked unstaged/untracked
@@ -48,14 +50,20 @@ Packages). Feature docs live in README.md.
   `"rebase"` (default, `git pull --rebase`) or `"ff-only"`; rebase pull is
   user-chosen: on conflicts it leaves the repo mid-rebase, surfaced by the
   in-panel error banner pointing at `git rebase --continue/--abort`, and
-  plain merge is still never offered — and `Repository.undo_last_commit`
+  plain merge is still never offered — `Repository.undo_last_commit`
   (soft `reset --soft HEAD~1`, refused when HEAD is reachable from any
-  remote; the parentless root commit goes through `update-ref -d HEAD`).
+  remote; the parentless root commit goes through `update-ref -d HEAD`) —
+  and `Repository.checkout` (`b` key or the ⎇ Branch toolbar button; a quick
+  panel of local branches from `for-each-ref refs/heads --sort=-committerdate`,
+  current one starred via `%(HEAD)`, picking the starred row is a no-op;
+  plain `git checkout <branch>`, never `-f` — when the switch would overwrite
+  uncommitted changes git refuses and the refusal lands in the in-panel
+  banner).
   Network ops use the
   `git_network_timeout` setting (default 120s, not `git_timeout`), and
   `GIT_TERMINAL_PROMPT=0` makes missing credentials fail fast instead of
   hanging a worker thread. Working-tree files are never touched except by a
-  fast-forward pull. Checkbox selection (`state["selected"]`, keyed by
+  fast-forward pull and a checkout. Checkbox selection (`state["selected"]`, keyed by
   `(where, path)`) is UI state, deliberately separate from git's staged split;
   `paths_to_stage` skips staged rows (adding the worktree copy could stage
   unseen changes), and callers must pass a non-empty path list — a bare

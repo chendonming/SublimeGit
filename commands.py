@@ -39,7 +39,7 @@ class SublimegitInsertAtLineCommand(sublime_plugin.TextCommand):
 
 
 class SublimegitOpenChangesCommand(sublime_plugin.WindowCommand):
-    """Git: Open Changes — the changed-files panel."""
+    """Git: Panel — open/focus the main Git Panel (changed files + actions)."""
 
     def run(self):
         changes_panel.open_changes(self.window)
@@ -189,6 +189,16 @@ class SublimegitUndoCommitCommand(sublime_plugin.TextCommand):
 
     def run(self, edit):
         changes_panel.undo_commit(self.view)
+
+
+class SublimegitSwitchBranchCommand(sublime_plugin.TextCommand):
+    """Switch branch via quick panel (b / ⎇ Branch in the Changes view)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "changes")
+
+    def run(self, edit):
+        changes_panel.switch_branch(self.view)
 
 
 class SublimegitLoadMoreCommand(sublime_plugin.TextCommand):

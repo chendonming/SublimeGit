@@ -6,9 +6,9 @@ Electron 的性能包袱。
 
 覆盖三个核心场景：
 
-1. **Git Changes 面板** — 列出当前所有变更文件（staged / unstaged / untracked），
+1. **Git Panel** — 列出当前所有变更文件（staged / unstaged / untracked），
    光标所在行按 `⏎` 或双击，打开左右分栏 Diff（左 = 旧，右 = 新，增删改按
-   色彩区分，自动适配当前 Color Scheme）。顶部有 **Push / Pull / Undo 按钮**，
+   色彩区分，自动适配当前 Color Scheme）。顶部有 **Push / Pull / Undo / Branch 按钮**，
    标题行标注 upstream 与 `↑ahead ↓behind`，未推送的本地提交列在 **OUTGOING**
    区块。
 2. **Git Timeline 面板** — 整个仓库的提交历史，每行从左到右为
@@ -44,33 +44,35 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 
 | 命令 | 作用 |
 | --- | --- |
-| `Git: Open Changes` | 打开/聚焦变更文件面板 |
+| `Git: Panel` | 打开/聚焦 Git Panel（变更文件 + 全部 Git 操作） |
 | `Git: Open Timeline` | 打开/聚焦提交历史面板 |
 | `Git: File History` | 当前文件历史（quick panel） |
-| `Git: Stage Selected Files` | 暂存所勾选的文件（需光标在 Changes 面板） |
-| `Git: Unstage Selected Files` | 取消暂存所勾选的文件（需光标在 Changes 面板） |
+| `Git: Stage Selected Files` | 暂存所勾选的文件（需光标在 Git Panel） |
+| `Git: Unstage Selected Files` | 取消暂存所勾选的文件（需光标在 Git Panel） |
 | `Git: Refresh Panel` | 刷新当前面板 |
-| `Git: Push` | 推送当前分支（需光标在 Changes 面板） |
-| `Git: Undo Last Commit` | 撤销最新未推送提交（需光标在 Changes 面板） |
-| `Git: Pull (pull_mode: rebase / ff-only)` | 拉取当前分支（需光标在 Changes 面板） |
+| `Git: Push` | 推送当前分支（需光标在 Git Panel） |
+| `Git: Undo Last Commit` | 撤销最新未推送提交（需光标在 Git Panel） |
+| `Git: Pull (pull_mode: rebase / ff-only)` | 拉取当前分支（需光标在 Git Panel） |
+| `Git: Switch Branch` | quick panel 选择并切换本地分支（需光标在 Git Panel） |
 | `Git: Close Diff` | 关闭 Diff 分栏并恢复原布局 |
 
 面板内快捷键（只在 SublimeGit 的面板里生效，不影响正常编辑）：
 
 | 键 | 面板 | 作用 |
 | --- | --- | --- |
-| `⏎` / 双击 | Changes / Timeline | 打开光标所在项的 Diff / 提交 |
-| `space` | Changes | 勾选 / 取消光标行的 checkbox；在根节点 `ALL` 行上 = 全选 / 反选全部 |
-| `a` / `shift+a` | Changes | 全选 / 清空所有 checkbox |
-| `shift+s` | Changes | 暂存所勾选的文件（只有 unstaged / untracked 行生效） |
-| `s` | Changes | 取消暂存所勾选的文件（只有 STAGED 行生效） |
-| `⌘⏎` / `ctrl+⏎` | Changes | 提交所勾选的文件（输入信息后回车） |
-| `shift+p` | Changes | Push 当前分支（无 upstream 时自动 `-u` 到第一个 remote） |
-| `p` | Changes | Pull 当前分支（默认 rebase，`pull_mode` 可改 ff-only） |
-| `⌘⇧K` / `ctrl+⇧K` | Changes | Push（`shift+p` 的备选键位） |
-| `⌘⌥P` / `ctrl+⌥P` | Changes | Pull（`p` 的备选键位） |
-| `u` | Changes | 撤销最新未推送提交（soft reset，弹窗确认；已推送则拒绝） |
-| `r` | Changes / Timeline | 刷新 |
+| `⏎` / 双击 | Git Panel / Timeline | 打开光标所在项的 Diff / 提交 |
+| `space` | Git Panel | 勾选 / 取消光标行的 checkbox；在根节点 `ALL` 行上 = 全选 / 反选全部 |
+| `a` / `shift+a` | Git Panel | 全选 / 清空所有 checkbox |
+| `shift+s` | Git Panel | 暂存所勾选的文件（只有 unstaged / untracked 行生效） |
+| `s` | Git Panel | 取消暂存所勾选的文件（只有 STAGED 行生效） |
+| `⌘⏎` / `ctrl+⏎` | Git Panel | 提交所勾选的文件（输入信息后回车） |
+| `shift+p` | Git Panel | Push 当前分支（无 upstream 时自动 `-u` 到第一个 remote） |
+| `p` | Git Panel | Pull 当前分支（默认 rebase，`pull_mode` 可改 ff-only） |
+| `⌘⇧K` / `ctrl+⇧K` | Git Panel | Push（`shift+p` 的备选键位） |
+| `⌘⌥P` / `ctrl+⌥P` | Git Panel | Pull（`p` 的备选键位） |
+| `u` | Git Panel | 撤销最新未推送提交（soft reset，弹窗确认；已推送则拒绝） |
+| `b` | Git Panel | quick panel 选择并切换本地分支（当前分支标 `*`，最近提交的排前面） |
+| `r` | Git Panel / Timeline | 刷新 |
 | `m` | Timeline | 加载下一页提交（默认 100/页） |
 | `esc` | Diff 视图 | 关闭 Diff，恢复布局 |
 
@@ -85,7 +87,7 @@ Mariana、Monokai、Dracula 等常见主题天然支持，无需额外配色配�
 
 ### 交互式提交
 
-Changes 面板是 yazi 风格的两步操作：先选中、再执行。列表顶部有一个根节点
+Git Panel 是 yazi 风格的两步操作：先选中、再执行。列表顶部有一个根节点
 `ALL (n/m)` 行——`space` 在它上面等于全选/反选全部文件（部分选中时显示半选
 符号 `▣`），`a` / `shift+a` 随时全选 / 清空。勾选好后 `⌘⏎`（或 `ctrl+⏎`）
 提交所勾选的文件，在弹出的输入面板里写 commit message 后回车。checkbox 只
@@ -106,10 +108,10 @@ Changes 面板是 yazi 风格的两步操作：先选中、再执行。列表顶
 
 这是插件的写操作路径之一，其余所有 git 调用保持只读。
 
-### Push / Pull / Undo 与远程状态
+### Push / Pull / Undo / Branch 与远程状态
 
-Changes 面板顶部有 Push / Pull / Undo 三个按钮，点击或用快捷键
-（`shift+p` / `p` / `u`）触发：
+Git Panel 顶部有 Push / Pull / Undo / Branch 四个按钮，点击或用快捷键
+（`shift+p` / `p` / `u` / `b`）触发：
 
 - **Push**：推送当前分支；分支还没有 upstream 时自动
   `git push -u <第一个 remote> <分支>` 建立关联。
@@ -123,6 +125,11 @@ Changes 面板顶部有 Push / Pull / Undo 三个按钮，点击或用快捷键
   拒绝执行——插件绝不改写已推送的历史（找回更早的本地提交请用 `git reflog`）。
   撤销仓库的第一个提交（无父提交）走 `update-ref -d HEAD`，分支回到「尚无提交」
   状态、改动保留。
+- **Branch**：quick panel 列出所有本地分支（按最近提交时间排序，当前分支标
+  `*`），回车即 `git checkout` 切换；选中当前分支等于无操作。切换会改动工作区
+  与 index——若有未提交改动会被覆盖时 git 自行拒绝，拒绝原因照常显示在面板
+  红色横幅里；插件从不加 `-f` 强切。远程分支的检出（如基于 `origin/foo` 建
+  本地分支）仍需终端。
 - 网络 git（push/pull）的超时独立于 `git_timeout`，由设置项
   `git_network_timeout` 控制（默认 120s）；凭据缺失时借助
   `GIT_TERMINAL_PROMPT=0` 快速失败并在状态栏给出可操作提示，不会卡住界面。
@@ -130,7 +137,7 @@ Changes 面板顶部有 Push / Pull / Undo 三个按钮，点击或用快捷键
 远程状态在两个面板中显式标注（数据来自本地缓存的 remote-tracking refs，
 即最近一次 fetch 时的快照）：
 
-- **Changes 面板**：标题行显示 upstream 及 `↑ahead ↓behind`；存在未推送提交时，
+- **Git Panel**：标题行显示 upstream 及 `↑ahead ↓behind`；存在未推送提交时，
   列表顶部出现 **OUTGOING** 区块，列出「不在任何 remote 上的提交」（最多 8 条，
   更多请去 Timeline），`⏎` 同样能打开该提交的变更文件列表。
 - **Timeline 面板**：标题行显示 `↑N unpushed` 统计；每条提交行尾——`↑` 表示
@@ -165,8 +172,8 @@ SublimeGit/
 - **错误显示在面板内**：任何后台失败（刷新 / push / pull / commit）都会在面板
   内渲染红色错误横幅——一行可操作的简短提示 + git stderr 明细（最多 12 行），
   状态栏同步一行摘要；`r` 刷新成功后自动清除。排查细节才需要开控制台。
-- **最小化写操作**：除交互式提交 / Push / Pull（仅 `--ff-only`）三个显式路径外，
-  全部 git 调用均为只读，并设置 `GIT_OPTIONAL_LOCKS=0` 与
+- **最小化写操作**：除交互式提交 / 批量暂存 / Push / Pull / Undo / 切换分支
+  六个显式路径外，全部 git 调用均为只读，并设置 `GIT_OPTIONAL_LOCKS=0` 与
   `GIT_TERMINAL_PROMPT=0`（连 index 的可选锁都不碰，凭据缺失快速失败）；所有
   视图都是 scratch + read-only，绝不向工作区写任何临时文件。
 - **命令类只放包顶层**：Sublime 只扫描包顶层 `.py` 文件来注册
@@ -192,8 +199,9 @@ python3 -m unittest discover -s tests
 ## 已知边界（v1）
 
 - 写操作仅限交互式提交、批量暂存/取消暂存（`shift+s` / `s`，作用于勾选集）、
-  Undo、Push、Pull（`pull_mode`：默认 rebase，可选 ff-only）；fetch / merge /
-  手动 rebase 继续 / 分支管理仍需终端。
+  Undo、Push、Pull（`pull_mode`：默认 rebase，可选 ff-only）、切换本地分支
+  （`b`）；fetch / merge / 手动 rebase 继续 / 新建与删除分支 / 检出远程分支
+  仍需终端。
 - 远程状态基于最近一次 fetch 的 remote-tracking refs 快照，不会自动 fetch。
 - Timeline 为线性列表，未画分支 DAG 图。
 - 超过 4000 行的 diff 跳过智能对齐，退化为逐行对比（避免 O(n²) 卡顿）。

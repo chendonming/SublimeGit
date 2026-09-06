@@ -13,9 +13,10 @@ if "sublime" not in sys.modules:
 from SublimeGit.core import git_runner
 from SublimeGit.core import repo as repo_mod
 from SublimeGit.core.models import GitFile, paths_to_stage, relative_time
-from SublimeGit.core.repo import (parse_branch_line, parse_file_history,
-                                  parse_log, parse_name_status,
-                                  parse_status, parse_status_full)
+from SublimeGit.core.repo import (parse_branch_line, parse_branches,
+                                  parse_file_history, parse_log,
+                                  parse_name_status, parse_status,
+                                  parse_status_full)
 from SublimeGit.views.common import friendly_error
 
 RS = "\x1e"
@@ -226,6 +227,32 @@ class ParseStatusFullTest(unittest.TestCase):
         self.assertEqual([f.path for f in files], ["a.py"])
 
 
+class ParseBranchesTest(unittest.TestCase):
+    def test_marks_current_branch_and_keeps_fields(self):
+        data = (" \x00dev\x00a1b2c3d\x00dev subject\n"
+                "*\x00main\x00d4e5f6a\x00main subject\n").encode("utf-8")
+        branches = parse_branches(data)
+        self.assertEqual([b.name for b in branches], ["dev", "main"])
+        self.assertFalse(branches[0].current)
+        self.assertTrue(branches[1].current)
+        self.assertEqual(branches[1].short, "d4e5f6a")
+        self.assertEqual(branches[1].subject, "main subject")
+
+    def test_detached_head_marks_nothing(self):
+        data = " \x00main\x00d4e5f6a\x00subject\n".encode("utf-8")
+        branches = parse_branches(data)
+        self.assertEqual(len(branches), 1)
+        self.assertFalse(branches[0].current)
+
+    def test_skips_blank_and_malformed_lines(self):
+        data = b"\n\n garbage \n\x00\x00\x00\n \x00main\x00abc\x00s\n"
+        branches = parse_branches(data)
+        self.assertEqual([b.name for b in branches], ["main"])
+
+    def test_empty_output(self):
+        self.assertEqual(parse_branches(b""), [])
+
+
 class PushPullTest(unittest.TestCase):
     """Repository.push/pull argv decisions, with git subprocesses mocked out."""
 
@@ -290,6 +317,39 @@ class PushPullTest(unittest.TestCase):
         with patcher:
             with self.assertRaises(git_runner.GitError):
                 repo_mod.Repository("/r").push()
+
+
+class BranchSwitchTest(unittest.TestCase):
+    """Repository.branches/checkout argv, git subprocesses mocked out."""
+
+    def test_branches_uses_for_each_ref_with_head_marker(self):
+        captured = {}
+
+        def fake_run_sync(cwd, args, timeout=None):
+            captured["args"] = args
+            return 0, b"*\x00main\x00abc\x00s\n", b""
+
+        with mock.patch("SublimeGit.core.git_runner.run_sync", fake_run_sync):
+            branches = repo_mod.Repository("/r").branches()
+        self.assertEqual(captured["args"][0], "for-each-ref")
+        self.assertIn("refs/heads", captured["args"])
+        self.assertEqual([b.name for b in branches], ["main"])
+
+    def test_checkout_returns_gits_last_line(self):
+        def fake_run_sync(cwd, args, timeout=None):
+            return 0, b"", b"Switched to branch 'dev'\n"
+
+        with mock.patch("SublimeGit.core.git_runner.run_sync", fake_run_sync):
+            line = repo_mod.Repository("/r").checkout("dev")
+        self.assertEqual(line, "Switched to branch 'dev'")
+
+    def test_failed_checkout_raises_git_error(self):
+        def fake_run_sync(cwd, args, timeout=None):
+            return 1, b"", b"error: Your local changes would be overwritten"
+
+        with mock.patch("SublimeGit.core.git_runner.run_sync", fake_run_sync):
+            with self.assertRaises(git_runner.GitError):
+                repo_mod.Repository("/r").checkout("dev")
 
 
 class RunBgTest(unittest.TestCase):

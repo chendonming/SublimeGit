@@ -7,7 +7,7 @@ parsers are unit-testable with plain python3 (see tests/).
 import os
 
 from SublimeGit.core import git_runner
-from SublimeGit.core.models import BranchState, Commit, FileHistoryItem, GitFile
+from SublimeGit.core.models import Branch, BranchState, Commit, FileHistoryItem, GitFile
 
 # hash NUL short NUL author NUL email NUL date NUL subject NUL body NUL trailers RS
 LOG_FORMAT = "%H%x00%h%x00%aN%x00%aE%x00%aI%x00%s%x00%b%x00%(trailers:only,unfold)%x1e"
@@ -270,6 +270,31 @@ class Repository:
             raise git_runner.GitError(args, rc, err.decode("utf-8", "replace"))
         return args
 
+    # -- branches ----------------------------------------------------------
+    # Branch switching, the sixth explicit write path: plain `git checkout`.
+    # Without -f git refuses when the switch would overwrite uncommitted
+    # changes — the failure surfaces in the panel banner, nothing is forced.
+
+    def branches(self):
+        """Local branches, most recently committed first, HEAD marked."""
+        out = git_runner.run_ok(self.root, [
+            "for-each-ref", "refs/heads", "--sort=-committerdate",
+            "--format=%(HEAD)%00%(refname:short)%00%(objectname:short)"
+            "%00%(contents:subject)"])
+        return parse_branches(out)
+
+    def checkout(self, branch):
+        """Check out a local branch; returns git's human-readable last line
+        ("Switched to branch …"), which lands on the status bar."""
+        args = ["checkout", branch]
+        rc, out, err = git_runner.run_sync(self.root, args)
+        if rc != 0:
+            raise git_runner.GitError(args, rc, err.decode("utf-8", "replace"))
+        # checkout prints "Switched to branch 'x'" on stderr
+        lines = [ln.strip() for ln
+                 in (out + err).decode("utf-8", "replace").splitlines() if ln.strip()]
+        return lines[-1] if lines else "done"
+
     # -- staging & commit --------------------------------------------------
     # The plugin's explicit commit write path, reached solely from the
     # commit flow in the Changes panel; everything else stays read-only.
@@ -351,6 +376,24 @@ def _trailing_int(text):
         return int(text.split()[-1])
     except (IndexError, ValueError):
         return 0
+
+
+def parse_branches(data):
+    """Parse `for-each-ref refs/heads` output into Branch rows.
+
+    %(HEAD) is "*" on the checked-out branch and a space otherwise (detached
+    HEAD marks nothing); fields are NUL-separated, one branch per line.
+    """
+    branches = []
+    for line in data.decode("utf-8", "replace").split("\n"):
+        if "\x00" not in line:
+            continue
+        head, name, short, subject = (line.split("\x00") + ["", ""])[:4]
+        if not name:
+            continue
+        branches.append(Branch(name=name, current=head.strip() == "*",
+                               short=short, subject=subject))
+    return branches
 
 
 def parse_status(data):

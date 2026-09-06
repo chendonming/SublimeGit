@@ -53,6 +53,16 @@ class BranchState:
 
 
 @dataclass
+class Branch:
+    """One local branch row, for the Changes panel's switch-branch list."""
+
+    name: str = ""
+    current: bool = False  # HEAD points at this branch
+    short: str = ""        # tip commit's short sha
+    subject: str = ""      # tip commit's subject line
+
+
+@dataclass
 class Commit:
     hash: str = ""
     short: str = ""
