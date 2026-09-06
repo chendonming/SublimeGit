@@ -63,6 +63,8 @@ def _show_panel(window, root, rel, items):
         ])
 
     def pick(index):
+        if index < 0:  # esc — show_quick_panel calls back with -1 on cancel
+            return
         it = items[index]
         ctx = DiffContext(
             repo_root=root, path=it.path, old_path=it.old_path,
