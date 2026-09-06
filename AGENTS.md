@@ -34,11 +34,14 @@ Packages). Feature docs live in README.md.
 - **Panel views are scratch + read-only; git runs read-only with
   `GIT_OPTIONAL_LOCKS=0`** — except five explicit write paths reached only
   from user action in the Changes panel: the commit flow
-  (`Repository.stage_files` + `Repository.commit`), per-row staging (the `s`
-  key: `Repository.stage_files` for unstaged/untracked rows,
-  `Repository.unstage_files` = `reset HEAD -- <paths>` for staged rows, or
+  (`Repository.stage_files` + `Repository.commit`), selection-based staging
+  (`shift+S` = `Repository.stage_files` for the checked unstaged/untracked
+  rows via `paths_to_stage`; `s` = `Repository.unstage_files` =
+  `reset HEAD -- <paths>` for the checked staged rows, or
   `rm --cached` on an unborn branch — index-only, the worktree is never
-  touched; rename rows must pass old and new path),
+  touched; rename rows must pass old and new path; each direction skips rows
+  in the non-matching group so a mixed selection is safe, and after the op
+  `state["selected"]` keys migrate with the files to their new `where`),
   `Repository.push` (adds
   `-u <first-remote> <branch>` when the branch has no upstream),
   `Repository.pull`, whose mode comes from the `pull_mode` setting —
@@ -57,6 +60,11 @@ Packages). Feature docs live in README.md.
   `paths_to_stage` skips staged rows (adding the worktree copy could stage
   unseen changes), and callers must pass a non-empty path list — a bare
   `git add -A --` stages the whole tree.
+- **The Changes panel's first list row is the ALL root** (rendered whenever
+  there are files, row number in `state["root_row"]`): `space` on it toggles
+  every file, `a`/`shift+a` select all/none. Its checkbox is `☑` when all
+  files are checked, `▣` (`markup.changed.diff`) when some are, `☐` otherwise.
+  Lookup order for a cursor row: `commit_rows` → `root_row` → `rows`.
 - **The Changes panel's Push/Pull/Undo toolbar is a `LAYOUT_BLOCK` phantom pinned
   at Region(0, 0)**, erased and re-added on every render. Phantoms occupy
   layout space but not buffer positions, so all row/col math is unaffected.

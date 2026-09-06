@@ -5,7 +5,10 @@
     { "caption": "Git: Refresh Panel", "command": "sublimegit_refresh_view" },
     { "caption": "Git: Close Diff", "command": "sublimegit_close_diff" },
     { "caption": "Git: Push", "command": "sublimegit_push" },
-    { "caption": "Git: Stage/Unstage File (cursor row)", "command": "sublimegit_stage_toggle" },
+    { "caption": "Git: Stage Selected Files", "command": "sublimegit_stage_selected" },
+    { "caption": "Git: Unstage Selected Files", "command": "sublimegit_unstage_selected" },
+    { "caption": "Git: Select All Files", "command": "sublimegit_select_all" },
+    { "caption": "Git: Select None", "command": "sublimegit_select_none" },
     { "caption": "Git: Undo Last Commit", "command": "sublimegit_undo_commit" },
     { "caption": "Git: Pull (pull_mode: rebase / ff-only)", "command": "sublimegit_pull" }
 ]

@@ -99,7 +99,8 @@ class SublimegitOpenSelectionCommand(sublime_plugin.TextCommand):
 
 
 class SublimegitToggleSelectionCommand(sublime_plugin.TextCommand):
-    """Toggle the checkbox on the cursor row (space in the Changes view)."""
+    """Toggle the checkbox on the cursor row (space in the Changes view);
+    on the ALL root row it selects/deselects every file."""
 
     def is_enabled(self):
         return common.is_kind(self.view, "changes")
@@ -111,13 +112,23 @@ class SublimegitToggleSelectionCommand(sublime_plugin.TextCommand):
 
 
 class SublimegitSelectAllCommand(sublime_plugin.TextCommand):
-    """Check every file row (a again clears all when everything is checked)."""
+    """Check every file row (a in the Changes view)."""
 
     def is_enabled(self):
         return common.is_kind(self.view, "changes")
 
     def run(self, edit):
-        changes_panel.toggle_all(self.view)
+        changes_panel.select_all(self.view)
+
+
+class SublimegitSelectNoneCommand(sublime_plugin.TextCommand):
+    """Clear every checkbox (shift+a in the Changes view)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "changes")
+
+    def run(self, edit):
+        changes_panel.select_none(self.view)
 
 
 class SublimegitCommitSelectedCommand(sublime_plugin.TextCommand):
@@ -131,7 +142,7 @@ class SublimegitCommitSelectedCommand(sublime_plugin.TextCommand):
 
 
 class SublimegitPushCommand(sublime_plugin.TextCommand):
-    """Push the current branch (⌘⇧K / ctrl+shift+k in the Changes view)."""
+    """Push the current branch (shift+P / ⌘⇧K / ctrl+shift+k in the Changes view)."""
 
     def is_enabled(self):
         return common.is_kind(self.view, "changes")
@@ -141,7 +152,7 @@ class SublimegitPushCommand(sublime_plugin.TextCommand):
 
 
 class SublimegitPullCommand(sublime_plugin.TextCommand):
-    """Pull the current branch, fast-forward only (⌘⌥P / ctrl+alt+p)."""
+    """Pull the current branch, mode from `pull_mode` (p / ⌘⌥P / ctrl+alt+p)."""
 
     def is_enabled(self):
         return common.is_kind(self.view, "changes")
@@ -150,16 +161,24 @@ class SublimegitPullCommand(sublime_plugin.TextCommand):
         changes_panel.pull(self.view)
 
 
-class SublimegitStageToggleCommand(sublime_plugin.TextCommand):
-    """Stage/unstage the file under the cursor (s in the Changes view)."""
+class SublimegitStageSelectedCommand(sublime_plugin.TextCommand):
+    """Stage the checked files (shift+s in the Changes view)."""
 
     def is_enabled(self):
         return common.is_kind(self.view, "changes")
 
     def run(self, edit):
-        sels = self.view.sel()
-        row = self.view.rowcol(sels[0].begin())[0] if sels else 0
-        changes_panel.stage_toggle_at_row(self.view, row)
+        changes_panel.stage_selected(self.view)
+
+
+class SublimegitUnstageSelectedCommand(sublime_plugin.TextCommand):
+    """Unstage the checked files (s in the Changes view)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "changes")
+
+    def run(self, edit):
+        changes_panel.unstage_selected(self.view)
 
 
 class SublimegitUndoCommitCommand(sublime_plugin.TextCommand):

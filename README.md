@@ -46,7 +46,8 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 | `Git: Open Changes` | 打开/聚焦变更文件面板 |
 | `Git: Open Timeline` | 打开/聚焦提交历史面板 |
 | `Git: File History` | 当前文件历史（quick panel） |
-| `Git: Stage/Unstage File (cursor row)` | 暂存/取消暂存光标文件（需光标在 Changes 面板） |
+| `Git: Stage Selected Files` | 暂存所勾选的文件（需光标在 Changes 面板） |
+| `Git: Unstage Selected Files` | 取消暂存所勾选的文件（需光标在 Changes 面板） |
 | `Git: Refresh Panel` | 刷新当前面板 |
 | `Git: Push` | 推送当前分支（需光标在 Changes 面板） |
 | `Git: Undo Last Commit` | 撤销最新未推送提交（需光标在 Changes 面板） |
@@ -58,16 +59,22 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 | 键 | 面板 | 作用 |
 | --- | --- | --- |
 | `⏎` / 双击 | Changes / Timeline | 打开光标所在项的 Diff / 提交 |
-| `space` | Changes | 勾选 / 取消光标行的 checkbox |
-| `s` | Changes | 暂存（unstaged/untracked 行）或取消暂存（staged 行）光标文件 |
-| `a` | Changes | 全选 / 清空所有 checkbox |
+| `space` | Changes | 勾选 / 取消光标行的 checkbox；在根节点 `ALL` 行上 = 全选 / 反选全部 |
+| `a` / `shift+a` | Changes | 全选 / 清空所有 checkbox |
+| `shift+s` | Changes | 暂存所勾选的文件（只有 unstaged / untracked 行生效） |
+| `s` | Changes | 取消暂存所勾选的文件（只有 STAGED 行生效） |
 | `⌘⏎` / `ctrl+⏎` | Changes | 提交所勾选的文件（输入信息后回车） |
-| `⌘⇧K` / `ctrl+⇧K` | Changes | Push 当前分支（无 upstream 时自动 `-u` 到第一个 remote） |
-| `⌘⌥P` / `ctrl+⌥P` | Changes | Pull 当前分支（默认 rebase，`pull_mode` 可改 ff-only） |
+| `shift+p` | Changes | Push 当前分支（无 upstream 时自动 `-u` 到第一个 remote） |
+| `p` | Changes | Pull 当前分支（默认 rebase，`pull_mode` 可改 ff-only） |
+| `⌘⇧K` / `ctrl+⇧K` | Changes | Push（`shift+p` 的备选键位） |
+| `⌘⌥P` / `ctrl+⌥P` | Changes | Pull（`p` 的备选键位） |
 | `u` | Changes | 撤销最新未推送提交（soft reset，弹窗确认；已推送则拒绝） |
 | `r` | Changes / Timeline | 刷新 |
 | `m` | Timeline | 加载下一页提交（默认 100/页） |
 | `esc` | Diff 视图 | 关闭 Diff，恢复布局 |
+
+快捷键思路与 yazi 一致：小写键做无副作用的操作（勾选、全选、pull 进来），
+大写键做有副作用的操作（暂存、push 出去）；先 `space`/`a` 选中，再 `s`/`shift+s` 批量执行。
 
 Diff 视图的颜色来自 color scheme 的 diff scopes
 （`markup.inserted.diff` / `markup.deleted.diff` / `markup.changed.diff`），
@@ -77,26 +84,31 @@ Mariana、Monokai、Dracula 等常见主题天然支持，无需额外配色配�
 
 ### 交互式提交
 
-Changes 面板每个文件行前有 checkbox：`space` 勾选/取消，`a` 全选/清空，
-`⌘⏎`（或 `ctrl+⏎`）提交所勾选的文件，在弹出的输入面板里写 commit message 后回车。
-checkbox 只表示「本次要操作的文件」，与 git 的 staged/unstaged 状态无关：
+Changes 面板是 yazi 风格的两步操作：先选中、再执行。列表顶部有一个根节点
+`ALL (n/m)` 行——`space` 在它上面等于全选/反选全部文件（部分选中时显示半选
+符号 `▣`），`a` / `shift+a` 随时全选 / 清空。勾选好后 `⌘⏎`（或 `ctrl+⏎`）
+提交所勾选的文件，在弹出的输入面板里写 commit message 后回车。checkbox 只
+表示「本次要操作的文件」，与 git 的 staged/unstaged 状态无关：
 
 - 未暂存 / 未跟踪的所选文件按工作区内容 `git add -A --` 后进入提交；
 - STAGED 分组的行按索引中已有的版本原样提交（不会额外带入工作区改动）；
 - 注意：提交走的是完整 index commit，仓库里**已有暂存内容**的文件即使没勾选
   也会进入这次提交（它们在 STAGED 分组里可见，请留意）。
 
-`s` 在光标行上直接暂存/取消暂存：UNSTAGED / UNTRACKED 行执行
-`git add -A --`（暂存该文件的工作区状态），STAGED 行执行 `git reset HEAD --`
-（索引恢复到 HEAD）。只动 index、不碰工作区；重命名行自动带上新旧两个路径；
-操作后光标跟随该文件的新位置。
+`shift+s` 暂存所勾选的文件（`git add -A --`，把工作区状态放进 index），
+`s` 取消暂存所勾选的文件（`git reset HEAD --`，索引恢复到 HEAD）。两者都
+只对匹配分组的行生效：staged 行在 `shift+s` 时被跳过（index 里已是用户
+看到的版本，再 add 工作区副本可能带入未见改动），unstaged/untracked 行在
+`s` 时被跳过——所以全选后按 `s` / `shift+s` 总是安全的，各分组各取所需。
+只动 index、不碰工作区；重命名行自动带上新旧两个路径；操作后光标跟随文件
+的新位置，且勾选状态跟着文件在两个分组之间迁移（选中集不因操作而散掉）。
 
 这是插件的写操作路径之一，其余所有 git 调用保持只读。
 
 ### Push / Pull / Undo 与远程状态
 
 Changes 面板顶部有 Push / Pull / Undo 三个按钮，点击或用快捷键
-（`⌘⇧K` / `⌘⌥P` / `u`）触发：
+（`shift+p` / `p` / `u`）触发：
 
 - **Push**：推送当前分支；分支还没有 upstream 时自动
   `git push -u <第一个 remote> <分支>` 建立关联。
@@ -178,9 +190,9 @@ python3 -m unittest discover -s tests
 
 ## 已知边界（v1）
 
-- 写操作仅限交互式提交、单文件暂存/取消暂存（`s`）、Undo、Push、Pull
-  （`pull_mode`：默认 rebase，可选 ff-only）；fetch / merge / 手动 rebase
-  继续 / 分支管理仍需终端。
+- 写操作仅限交互式提交、批量暂存/取消暂存（`shift+s` / `s`，作用于勾选集）、
+  Undo、Push、Pull（`pull_mode`：默认 rebase，可选 ff-only）；fetch / merge /
+  手动 rebase 继续 / 分支管理仍需终端。
 - 远程状态基于最近一次 fetch 的 remote-tracking refs 快照，不会自动 fetch。
 - Timeline 为线性列表，未画分支 DAG 图。
 - 超过 4000 行的 diff 跳过智能对齐，退化为逐行对比（避免 O(n²) 卡顿）。

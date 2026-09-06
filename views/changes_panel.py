@@ -7,11 +7,16 @@ Checkboxes mean "selected for the next operation" and stay separate from git's
 staged/unstaged split. Diff refs are VS Code-style: staged = HEAD vs INDEX,
 unstaged = INDEX vs WORKTREE.
 
-`s` on a file row stages it (unstaged/untracked rows) or unstages it (staged
-rows) — an index-only operation, the working tree is never touched.
+Selection is yazi-style: space toggles the checkbox under the cursor (the
+root ALL row toggles everything), `a`/`shift+a` select all/none, then
+`shift+S` stages the checked files and `s` unstages them — index-only, the
+working tree is never touched. Only rows in the matching group act: staging
+skips staged rows (the index already holds what you see), unstaging skips
+unstaged/untracked rows, so a mixed selection is always safe.
 
 A phantom toolbar at the top of the panel holds the Push, Pull and Undo
-buttons (⌘⇧K / ⌘⌥P / u; the pull mode comes from the `pull_mode` setting —
+buttons (shift+P / p / u; ⌘⇧K / ⌘⌥P still work; the pull mode comes from
+the `pull_mode` setting —
 rebase by default, ff-only optional — and the button label shows which is
 active). The header shows the upstream with ↑ahead / ↓behind, and an OUTGOING
 section lists local commits no remote-tracking ref contains yet — Enter on
@@ -40,6 +45,7 @@ LETTER_SCOPES = {
     "D": "markup.deleted.diff",
 }
 CHECK_ON, CHECK_OFF = "☑", "☐"
+CHECK_SOME = "▣"  # root ALL row when only part of the files are checked
 ROW_FMT = "  {}  {}  {}"  # checkbox, status letter, display path
 CHECK_COL = 2
 LETTER_COL = 5
@@ -203,6 +209,17 @@ def _render(view, branch, files, has_remote=False, unpushed=frozenset(), sample=
                 "  … {} more — see Git Timeline".format(len(unpushed) - len(sample))))
         emit("")
 
+    root_row = None
+    if files:
+        # the ALL root row: space here selects/deselects every file at once —
+        # with staged and unstaged lists coexisting, per-group selection alone
+        # makes "act on everything" awkward
+        n_sel = sum(1 for f in files if _key(f) in selected)
+        mark = (CHECK_ON if n_sel == len(files)
+                else CHECK_SOME if n_sel else CHECK_OFF)
+        root_row = emit("  {}  ALL  ({}/{})".format(mark, n_sel, len(files)))
+        header_rows.append(root_row)
+
     for title, where in (("STAGED", "staged"), ("UNSTAGED", "unstaged"),
                          ("UNTRACKED", "untracked")):
         group = [f for f in files if f.where == where]
@@ -220,7 +237,7 @@ def _render(view, branch, files, has_remote=False, unpushed=frozenset(), sample=
     if not rows and not err:
         header_rows.append(emit("  ✓ working tree clean"))
     emit("")
-    emit("  space select · s stage/unstage · a all · ⏎ open · ⌘⏎ commit · u undo · ⌘⇧K push · ⌘⌥P pull · r refresh")
+    emit("  space select · S stage · s unstage · a/A all/none · ⏎ open · ⌘⏎ commit · P push · p pull · u undo · r refresh")
 
     view.run_command("sublimegit_replace_text", {"text": "\n".join(lines) + "\n"})
     _render_toolbar(view)
@@ -256,8 +273,17 @@ def _render(view, branch, files, has_remote=False, unpushed=frozenset(), sample=
                          [view.full_line(view.text_point(r, 0)) for r in error_rows],
                          common.ERROR_SCOPE)
 
+    view.erase_regions("sg-root")
+    if root_row is not None and n_sel:
+        # ALL's checkbox: green when everything is checked, amber mid-select
+        view.add_regions("sg-root",
+                         [sublime.Region(view.text_point(root_row, CHECK_COL),
+                                         view.text_point(root_row, CHECK_COL) + 1)],
+                         CHECK_SCOPE if n_sel == len(files) else "markup.changed.diff")
+
     st["rows"] = rows
     st["commit_rows"] = commit_rows
+    st["root_row"] = root_row
 
 
 def _render_toolbar(view):
@@ -282,6 +308,9 @@ def _on_toolbar(view, href):
 
 def open_at_row(view, row):
     st = common.state(view)
+    if st.get("root_row") == row:
+        view.set_status("sublimegit", "ALL is not a file — space toggles every checkbox")
+        return
     commit = st.get("commit_rows", {}).get(row)
     if commit is not None:
         timeline_panel.show_commit_files(view.window(), st.get("root"), commit)
@@ -333,6 +362,9 @@ def _cursor_row(view):
 
 def toggle_at_row(view, row):
     st = common.state(view)
+    if st.get("root_row") == row:
+        _toggle_all(view)
+        return
     f = st.get("rows", {}).get(row)
     if f is None:
         view.set_status("sublimegit", "move the cursor to a file line, then press space")
@@ -346,13 +378,28 @@ def toggle_at_row(view, row):
     _rerender(view)
 
 
-def toggle_all(view):
+def _toggle_all(view):
+    """space on the ALL root row: clear when everything is checked, else check all."""
     st = common.state(view)
     keys = {_key(f) for f in st.get("files") or []}
     if keys and keys <= st.get("selected", set()):
         st["selected"] = set()
     else:
         st["selected"] = keys
+    _rerender(view)
+
+
+def select_all(view):
+    """`a`: check every file row (idempotent)."""
+    st = common.state(view)
+    st["selected"] = {_key(f) for f in st.get("files") or []}
+    _rerender(view)
+
+
+def select_none(view):
+    """`shift+a`: clear every checkbox (idempotent)."""
+    st = common.state(view)
+    st["selected"] = set()
     _rerender(view)
 
 
@@ -368,17 +415,18 @@ def _rerender(view):
     view.sel().add(sublime.Region(view.text_point(row, LETTER_COL)))
 
 
-def stage_toggle_at_row(view, row):
-    """`s` on a file row: stage an unstaged/untracked file, unstage a staged
-    one — the row's group declares the intent. Index-only, never touches the
-    working tree; renames cover old and new path."""
+def _stage_selection(view, op):
+    """`shift+S` stages the checked files, `s` unstages them. Only rows in the
+    matching group act: staging skips staged rows (the index already holds
+    exactly the version the user is looking at — adding the worktree copy
+    could stage unseen changes), unstaging skips unstaged/untracked ones, so
+    a mixed selection is always safe. Index-only, never touches the working
+    tree; renames cover old and new path."""
     st = common.state(view)
-    f = st.get("rows", {}).get(row)
+    files = st.get("files") or []
+    chosen = [f for f in files if _key(f) in st.get("selected", set())]
     window = view.window()
     root = st.get("root")
-    if f is None:
-        view.set_status("sublimegit", "move the cursor to a file line, then press s")
-        return
     if not window or not root:
         view.set_status("sublimegit", "SublimeGit: no repository bound to this panel")
         return
@@ -386,14 +434,34 @@ def stage_toggle_at_row(view, row):
         view.set_status("sublimegit",
                         "SublimeGit: {} already in progress".format(st["syncing"]))
         return
-    if f.where == "staged":
-        op = "unstage"
-        paths = [f.path] + ([f.old_path] if f.old_path else [])
+    if not chosen:
+        view.set_status("sublimegit",
+                        "no files selected — space toggles a row, a selects all")
+        return
+    paths = []
+    if op == "stage":
+        paths = paths_to_stage(chosen)
+        if not paths:
+            view.set_status("sublimegit",
+                            "no unstaged files selected — staged rows are already in the index")
+            return
     else:
-        op = "stage"
-        paths = paths_to_stage([f])
+        for f in chosen:
+            if f.where == "staged":
+                paths.append(f.path)
+                if f.old_path:
+                    paths.append(f.old_path)
+        if not paths:
+            view.set_status("sublimegit",
+                            "no staged files selected — s only unstages STAGED rows")
+            return
+
+    new_where = "staged" if op == "stage" else "unstaged"
+    touched = set(paths)
+    n = len(chosen)
     st["syncing"] = op
-    view.set_status("sublimegit", "SublimeGit: {}ing {}…".format(op, f.path))
+    view.set_status("sublimegit", "SublimeGit: {}ing {} file{}…".format(
+        op, n, "" if n == 1 else "s"))
 
     def work():
         repo = repo_mod.Repository(root)
@@ -404,9 +472,13 @@ def stage_toggle_at_row(view, row):
 
     def done(_):
         st.pop("syncing", None)
-        if view.is_valid():
-            refresh(view, on_done=lambda: _refocus(
-                view, f.path, "staged" if op == "stage" else "unstaged"))
+        if not view.is_valid():
+            return
+        # the selection follows the files across the staged/unstaged split
+        st["selected"] = {(new_where, p) if p in touched else (w, p)
+                          for (w, p) in st.get("selected", set())}
+        focus_path = chosen[0].path
+        refresh(view, on_done=lambda: _refocus(view, focus_path, new_where))
 
     def err(e):
         st.pop("syncing", None)
@@ -414,6 +486,14 @@ def stage_toggle_at_row(view, row):
             _show_error(view, e)
 
     git_runner.run_bg(work, done, err)
+
+
+def stage_selected(view):
+    _stage_selection(view, "stage")
+
+
+def unstage_selected(view):
+    _stage_selection(view, "unstage")
 
 
 def _refocus(view, path, prefer_where):
@@ -594,12 +674,14 @@ def show_hint(view):
         view.set_status("sublimegit",
                         "↑ {} · {} · ⏎ changed files".format(commit.short, commit.title))
         return
+    if st.get("root_row") == row:
+        view.set_status("sublimegit",
+                        "ALL — space selects/deselects everything · a all · shift+a none")
+        return
     f = st.get("rows", {}).get(row)
     if f:
         mark = CHECK_ON if _key(f) in st.get("selected", set()) else CHECK_OFF
-        action = "unstage" if f.where == "staged" else "stage"
         view.set_status("sublimegit",
-                        "{} {} · space toggle · s {} · ⏎ diff".format(
-                            mark, f.display_path, action))
+                        "{} {} · space toggle · ⏎ diff".format(mark, f.display_path))
     else:
         view.set_status("sublimegit", "space select · ⏎ open · ⌘⇧K push · ⌘⌥P pull · r refresh")
