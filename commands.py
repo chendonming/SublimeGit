@@ -98,6 +98,38 @@ class SublimegitOpenSelectionCommand(sublime_plugin.TextCommand):
             timeline_panel.open_commit_at_row(self.view, row)
 
 
+class SublimegitToggleSelectionCommand(sublime_plugin.TextCommand):
+    """Toggle the checkbox on the cursor row (space in the Changes view)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "changes")
+
+    def run(self, edit):
+        sels = self.view.sel()
+        row = self.view.rowcol(sels[0].begin())[0] if sels else 0
+        changes_panel.toggle_at_row(self.view, row)
+
+
+class SublimegitSelectAllCommand(sublime_plugin.TextCommand):
+    """Check every file row (a again clears all when everything is checked)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "changes")
+
+    def run(self, edit):
+        changes_panel.toggle_all(self.view)
+
+
+class SublimegitCommitSelectedCommand(sublime_plugin.TextCommand):
+    """Commit the checked files (cmd/ctrl+enter in the Changes view)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "changes")
+
+    def run(self, edit):
+        changes_panel.commit_selected(self.view)
+
+
 class SublimegitLoadMoreCommand(sublime_plugin.TextCommand):
     """Load the next page of commits (`m` in the Timeline view)."""
 

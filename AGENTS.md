@@ -25,7 +25,26 @@ Packages). Feature docs live in README.md.
   breaking every cursor-row lookup. Row lookups that find no item set a status-bar
   hint instead of failing silently.
 - **Panel views are scratch + read-only; git runs read-only with
-  `GIT_OPTIONAL_LOCKS=0`.** The plugin never writes to the user's working tree.
+  `GIT_OPTIONAL_LOCKS=0`** — except the explicit commit flow
+  (`Repository.stage_files` + `Repository.commit`), the plugin's single write
+  path, reached only from user action in the Changes panel. Working-tree files
+  are never touched. Checkbox selection (`state["selected"]`, keyed by
+  `(where, path)`) is UI state, deliberately separate from git's staged split;
+  `paths_to_stage` skips staged rows (adding the worktree copy could stage
+  unseen changes), and callers must pass a non-empty path list — a bare
+  `git add -A --` stages the whole tree.
+- **`set_layout` cells are index tuples into `cols`/`rows`** — each cell is
+  `[col_start, row_start, col_end, row_end]` as *indices*, not fractions. A cell
+  whose bottom is `0` with `rows: [0.0, 1.0]` is a zero-height group and blanks
+  the window to black. The diff's 2-column layout is `[[0, 0, 1, 1], [1, 0, 2, 1]]`
+  (see `views/diff_view._render`).
+- **Diff pane scroll sync is a poller, not an event** — Sublime has no
+  viewport-changed callback, so `_ScrollSync` (`views/diff_view.py`) polls
+  viewport y every ~33 ms while both diff views are alive and mirrors y across
+  the pair; x stays per-view. Equal y means equal diff row because both panes
+  render the same aligned row list. It self-stops when either view dies. The
+  `expected`-write guard is load-bearing: without it the syncer reads its own
+  writes as user scrolls and the two panes fight each other.
 - **All git I/O is async** through `core/git_runner.run_bg`: git runs on a worker
   thread, results arrive on the UI thread. Every async render bumps a `gen` counter in
   the view's state (`views/common.state`) and drops stale results — keep this pattern

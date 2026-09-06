@@ -10,6 +10,8 @@ file-history diffs all render through this one code path.
 import json
 from dataclasses import asdict
 
+import sublime
+
 from SublimeGit.core import diff_engine, git_runner
 from SublimeGit.core.models import DiffContext
 from SublimeGit.core.repo import Repository
@@ -72,7 +74,10 @@ def _render(window, ctx, left_bytes, right_bytes):
     window.set_layout({
         "cols": [0.0, 0.5, 1.0],
         "rows": [0.0, 1.0],
-        "cells": [[0, 0, 1, 0], [1, 0, 2, 0]],
+        # cell = [col_start, row_start, col_end, row_end] as INDICES into
+        # cols/rows; bottom must be 1 here or both groups get zero height
+        # and the window renders as a black void
+        "cells": [[0, 0, 1, 1], [1, 0, 2, 1]],
     })
 
     left_view = window.new_file()
@@ -93,6 +98,7 @@ def _render(window, ctx, left_bytes, right_bytes):
         view.run_command("sublimegit_replace_text", {"text": text})
         _tint(view, rows, binary, is_old_side=(role == "old"))
 
+    _ScrollSync(window.id(), left_view, right_view).start()
     window.focus_view(right_view)
     window.status_message("SublimeGit: diff rendered · {} rows".format(len(rows)))
 
@@ -121,7 +127,78 @@ def _tint(view, rows, binary, is_old_side):
         view.add_regions("sg-rows:" + scope, regions, scope)
 
 
+_SCROLL_SYNC = {}  # window id -> the active _ScrollSync for that window
+
+
+class _ScrollSync:
+    """Mirror the two diff panes' viewport y while the diff is open.
+
+    Both panes render the same aligned row list (padding blanks where a side
+    has no line), so equal y means equal diff row — no line mapping needed.
+    Sublime has no viewport-changed event, so poll every ~2 frames and stop
+    as soon as either view dies. x stays per-view; only y is mirrored.
+    """
+
+    INTERVAL_MS = 33
+    EPSILON = 0.5  # px — sub-pixel jitter must not feed back into a sync loop
+    TTL_TICKS = 5  # how long to wait for a viewport write we issued to land
+
+    def __init__(self, window_id, left, right):
+        self._key = window_id
+        self._pair = (left, right)
+        self._last_y = {v.id(): v.viewport_position()[1] for v in self._pair}
+        self._expected = {}  # view id -> (y, ticks left) for our own writes
+
+    def start(self):
+        _SCROLL_SYNC[self._key] = self
+        sublime.set_timeout(self._tick, self.INTERVAL_MS)
+
+    def stop(self):
+        _SCROLL_SYNC.pop(self._key, None)
+
+    def _tick(self):
+        if _SCROLL_SYNC.get(self._key) is not self:
+            return  # replaced by a newer diff in this window
+        left, right = self._pair
+        if not (left.is_valid() and right.is_valid()):
+            self.stop()
+            return
+
+        driver = None
+        delta = 0.0
+        for view in self._pair:
+            vid = view.id()
+            y = view.viewport_position()[1]
+            expected = self._expected.get(vid)
+            if expected is not None:
+                exp_y, ttl = expected
+                if abs(y - exp_y) <= self.EPSILON:
+                    self._expected.pop(vid, None)
+                    self._last_y[vid] = y  # our own write landed
+                    continue
+                if ttl > 0:
+                    self._expected[vid] = (exp_y, ttl - 1)
+                    continue
+                self._expected.pop(vid, None)  # never landed; stop waiting
+            moved = y - self._last_y[vid]
+            if abs(moved) > self.EPSILON and abs(moved) > delta:
+                driver, delta = view, abs(moved)
+            else:
+                self._last_y[vid] = y
+
+        if driver is not None:
+            y = driver.viewport_position()[1]
+            other = right if driver is left else left
+            x, _ = other.viewport_position()
+            self._expected[other.id()] = (y, self.TTL_TICKS)
+            other.set_viewport_position((x, y))
+            self._last_y[driver.id()] = y
+
+        sublime.set_timeout(self._tick, self.INTERVAL_MS)
+
+
 def close_diff(window, restore_layout=True):
+    _SCROLL_SYNC.pop(window.id(), None)
     for view in list(window.views()):
         try:
             if view.settings().get(DIFF_KEY):

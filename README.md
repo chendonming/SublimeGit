@@ -51,6 +51,9 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 | 键 | 面板 | 作用 |
 | --- | --- | --- |
 | `⏎` / 双击 | Changes / Timeline | 打开光标所在项的 Diff / 提交 |
+| `space` | Changes | 勾选 / 取消光标行的 checkbox |
+| `a` | Changes | 全选 / 清空所有 checkbox |
+| `⌘⏎` / `ctrl+⏎` | Changes | 提交所勾选的文件（输入信息后回车） |
 | `r` | Changes / Timeline | 刷新 |
 | `m` | Timeline | 加载下一页提交（默认 100/页） |
 | `esc` | Diff 视图 | 关闭 Diff，恢复布局 |
@@ -58,6 +61,21 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 Diff 视图的颜色来自 color scheme 的 diff scopes
 （`markup.inserted.diff` / `markup.deleted.diff` / `markup.changed.diff`），
 Mariana、Monokai、Dracula 等常见主题天然支持，无需额外配色配置。
+左右两栏滚动自动同步：两边按对齐后的 diff 行 1:1 对应，滚动任意一侧另一侧跟随
+（Sublime 没有滚动事件，靠 diff 打开期间的轻量轮询实现，关掉 Diff 即停止）。
+
+### 交互式提交
+
+Changes 面板每个文件行前有 checkbox：`space` 勾选/取消，`a` 全选/清空，
+`⌘⏎`（或 `ctrl+⏎`）提交所勾选的文件，在弹出的输入面板里写 commit message 后回车。
+checkbox 只表示「本次要操作的文件」，与 git 的 staged/unstaged 状态无关：
+
+- 未暂存 / 未跟踪的所选文件按工作区内容 `git add -A --` 后进入提交；
+- STAGED 分组的行按索引中已有的版本原样提交（不会额外带入工作区改动）；
+- 注意：提交走的是完整 index commit，仓库里**已有暂存内容**的文件即使没勾选
+  也会进入这次提交（它们在 STAGED 分组里可见，请留意）。
+
+这是插件唯一的写操作路径，其余所有 git 调用保持只读。
 
 ## 设计要点
 

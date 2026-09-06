@@ -112,6 +112,19 @@ class Repository:
                 "--root", sha])
         return parse_name_status(out)
 
+    # -- staging & commit --------------------------------------------------
+    # The plugin's only write path, reached solely from the explicit commit
+    # flow in the Changes panel; everything else stays read-only.
+
+    def stage_files(self, paths):
+        """`git add -A --` the named paths: stages adds/mods/deletes/renames."""
+        git_runner.run_ok(self.root, ["add", "-A", "--"] + list(paths))
+
+    def commit(self, message):
+        """Commit the current index; returns the raw git output (short sha line)."""
+        out = git_runner.run_ok(self.root, ["commit", "-m", message])
+        return out.decode("utf-8", "replace").strip()
+
 
 def parse_status(data):
     """Parse `git status --porcelain=v1 -z` into GitFile entries.

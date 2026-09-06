@@ -7,7 +7,7 @@ if "sublime" not in sys.modules:
     sys.path.insert(0, os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.abspath(__file__)))))
 
-from SublimeGit.core.models import relative_time
+from SublimeGit.core.models import GitFile, paths_to_stage, relative_time
 from SublimeGit.core.repo import (parse_file_history, parse_log,
                                   parse_name_status, parse_status)
 
@@ -126,6 +126,31 @@ class RelativeTimeTest(unittest.TestCase):
 
     def test_bad_input_returns_input(self):
         self.assertEqual(relative_time("not-a-date"), "not-a-date")
+
+
+class PathsToStageTest(unittest.TestCase):
+    def test_staged_rows_are_skipped(self):
+        paths = paths_to_stage([GitFile(path="a.py", where="staged")])
+        self.assertEqual(paths, [])
+
+    def test_unstaged_and_untracked_paths_are_staged(self):
+        paths = paths_to_stage([
+            GitFile(path="a.py", where="unstaged"),
+            GitFile(path="b.py", status="U", where="untracked"),
+        ])
+        self.assertEqual(paths, ["a.py", "b.py"])
+
+    def test_rename_needs_old_and_new_path(self):
+        paths = paths_to_stage([
+            GitFile(path="new.py", old_path="old.py", status="R", where="unstaged")])
+        self.assertEqual(paths, ["new.py", "old.py"])
+
+    def test_both_rows_of_one_file_deduplicate(self):
+        paths = paths_to_stage([
+            GitFile(path="a.py", where="staged"),
+            GitFile(path="a.py", where="unstaged"),
+        ])
+        self.assertEqual(paths, ["a.py"])
 
 
 if __name__ == "__main__":

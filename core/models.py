@@ -23,6 +23,24 @@ class GitFile:
         return self.path
 
 
+def paths_to_stage(files):
+    """Paths `git add -A --` needs to bring these GitFiles' worktree state
+    into the index.
+
+    staged rows are skipped — the index already holds exactly the version the
+    user is looking at; adding the worktree copy could stage unseen changes.
+    Renames need old and new path (-A records the deletion of the old name).
+    """
+    out = []
+    for f in files:
+        if f.where == "staged":
+            continue
+        out.append(f.path)
+        if f.old_path:
+            out.append(f.old_path)
+    return list(dict.fromkeys(out))
+
+
 @dataclass
 class Commit:
     hash: str = ""
