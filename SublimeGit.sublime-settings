@@ -3,6 +3,8 @@
     "git_path": "",
     // Seconds before a git subprocess is killed
     "git_timeout": 20,
+    // Seconds before a network git subprocess (push / pull) is killed
+    "git_network_timeout": 120,
     // Commits loaded per page in the Git Timeline
     "log_page_size": 100,
     // Max commits listed by Git: File History

@@ -3,5 +3,7 @@
     { "caption": "Git: Open Timeline", "command": "sublimegit_open_timeline" },
     { "caption": "Git: File History", "command": "sublimegit_file_history" },
     { "caption": "Git: Refresh Panel", "command": "sublimegit_refresh_view" },
-    { "caption": "Git: Close Diff", "command": "sublimegit_close_diff" }
+    { "caption": "Git: Close Diff", "command": "sublimegit_close_diff" },
+    { "caption": "Git: Push", "command": "sublimegit_push" },
+    { "caption": "Git: Pull (fast-forward only)", "command": "sublimegit_pull" }
 ]

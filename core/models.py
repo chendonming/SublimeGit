@@ -42,6 +42,17 @@ def paths_to_stage(files):
 
 
 @dataclass
+class BranchState:
+    """Upstream relationship of the current branch, from `git status -b`."""
+
+    name: str = ""
+    upstream: str = ""    # "" = no upstream configured
+    ahead: int = 0        # local commits the upstream lacks
+    behind: int = 0       # upstream commits not merged in yet
+    gone: bool = False    # upstream configured but deleted on the remote
+
+
+@dataclass
 class Commit:
     hash: str = ""
     short: str = ""

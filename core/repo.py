@@ -7,7 +7,7 @@ parsers are unit-testable with plain python3 (see tests/).
 import os
 
 from SublimeGit.core import git_runner
-from SublimeGit.core.models import Commit, FileHistoryItem, GitFile
+from SublimeGit.core.models import BranchState, Commit, FileHistoryItem, GitFile
 
 # hash NUL short NUL author NUL email NUL date NUL subject NUL body NUL trailers RS
 LOG_FORMAT = "%H%x00%h%x00%aN%x00%aE%x00%aI%x00%s%x00%b%x00%(trailers:only,unfold)%x1e"
@@ -50,10 +50,14 @@ class Repository:
 
     # -- status -----------------------------------------------------------
 
-    def status_files(self):
+    def status(self):
+        """One `git status -z -b` call → (BranchState|None, [GitFile])."""
         out = git_runner.run_ok(self.root, [
-            "status", "--porcelain=v1", "-z", "--untracked-files=normal"])
-        return parse_status(out)
+            "status", "--porcelain=v1", "-z", "-b", "--untracked-files=normal"])
+        return parse_status_full(out)
+
+    def status_files(self):
+        return self.status()[1]
 
     # -- content ----------------------------------------------------------
 
@@ -112,9 +116,112 @@ class Repository:
                 "--root", sha])
         return parse_name_status(out)
 
+    # -- remote state ------------------------------------------------------
+    # Read-only ref inspection; these define what "already on a remote" means.
+
+    def has_remotes(self):
+        rc, out, _ = git_runner.run_sync(self.root, ["remote"])
+        return rc == 0 and bool(out.strip())
+
+    def unpushed(self):
+        """SHAs reachable from HEAD but from no remote-tracking ref — exactly
+        what the next `git push` would publish. Empty when HEAD is unborn.
+
+        "On a remote" means reachable from ANY refs/remotes entry: comparing
+        only against @{upstream} would falsely flag commits that were pushed
+        to some other remote branch.
+        """
+        rc, out, _ = git_runner.run_sync(
+            self.root, ["rev-list", "HEAD", "--not", "--remotes"])
+        if rc != 0:
+            return set()
+        return set(out.decode("utf-8", "replace").split())
+
+    def unpushed_log(self, limit=8):
+        """Newest-first Commits for unpushed(), capped for list rendering."""
+        rc, out, _ = git_runner.run_sync(
+            self.root, ["log", "-n", str(limit), "--pretty=format:" + LOG_FORMAT,
+                        "HEAD", "--not", "--remotes"])
+        return parse_log(out) if rc == 0 else []
+
+    def remote_ref_tips(self):
+        """{full sha: [remote branch, …]} for commits a remote ref points at.
+
+        Symbolic HEAD refs (refs/remotes/<name>/HEAD) are filtered out — they
+        duplicate the default branch's tip as a bare "<name>" label.
+        """
+        rc, out, _ = git_runner.run_sync(self.root, [
+            "for-each-ref", "refs/remotes",
+            "--format=%(objectname)%00%(refname)"])
+        tips = {}
+        if rc == 0:
+            for line in out.decode("utf-8", "replace").split("\n"):
+                if "\x00" not in line:
+                    continue
+                sha, ref = line.split("\x00", 1)
+                if not sha or not ref.startswith("refs/remotes/"):
+                    continue
+                name = ref[len("refs/remotes/"):]
+                if name.endswith("/HEAD"):
+                    continue
+                if name:
+                    tips.setdefault(sha, []).append(name)
+        return tips
+
+    # -- push & pull -------------------------------------------------------
+    # Explicit network write paths, reached only from the Changes panel's
+    # Push/Pull actions. pull is deliberately --ff-only: the plugin never
+    # starts a merge, rebase, or conflict state on its own.
+
+    def push(self):
+        """Push the current branch; -u <first-remote> on the first push."""
+        branch = self._branch_for_sync("push")
+        rc, _, _ = git_runner.run_sync(
+            self.root, ["rev-parse", "--abbrev-ref", branch + "@{upstream}"])
+        args = ["push"]
+        if rc != 0:
+            args = ["push", "-u", self._default_remote(), branch]
+        return self._run_network(args)
+
+    def pull(self):
+        """Fast-forward-only pull of the current branch's upstream."""
+        branch = self._branch_for_sync("pull")
+        rc, _, _ = git_runner.run_sync(
+            self.root, ["rev-parse", "--abbrev-ref", branch + "@{upstream}"])
+        if rc != 0:
+            raise git_runner.GitError(
+                ["pull"], 1,
+                "branch '{}' has no upstream to pull from".format(branch))
+        return self._run_network(["pull", "--ff-only"])
+
+    def _branch_for_sync(self, op):
+        branch = self.current_branch()
+        if branch in ("", "?", "HEAD"):
+            raise git_runner.GitError(
+                [op], 1, "detached HEAD — check out a branch first")
+        return branch
+
+    def _default_remote(self):
+        rc, out, _ = git_runner.run_sync(self.root, ["remote"])
+        names = out.decode("utf-8", "replace").split()
+        if rc != 0 or not names:
+            raise git_runner.GitError(
+                ["push"], 1, "no remote configured — add one with git remote add")
+        return names[0]
+
+    def _run_network(self, args):
+        timeout = git_runner.get_setting("git_network_timeout", 120)
+        rc, out, err = git_runner.run_sync(self.root, args, timeout)
+        if rc != 0:
+            raise git_runner.GitError(args, rc, err.decode("utf-8", "replace"))
+        # push/pull print their human-readable result on stderr
+        lines = [ln.strip() for ln
+                 in (out + err).decode("utf-8", "replace").splitlines() if ln.strip()]
+        return lines[-1] if lines else "done"
+
     # -- staging & commit --------------------------------------------------
-    # The plugin's only write path, reached solely from the explicit commit
-    # flow in the Changes panel; everything else stays read-only.
+    # The plugin's explicit commit write path, reached solely from the
+    # commit flow in the Changes panel; everything else stays read-only.
 
     def stage_files(self, paths):
         """`git add -A --` the named paths: stages adds/mods/deletes/renames."""
@@ -126,14 +233,71 @@ class Repository:
         return out.decode("utf-8", "replace").strip()
 
 
+def parse_status_full(data):
+    """Parse `git status --porcelain=v1 -z -b` into (BranchState|None, files).
+
+    The -b branch header is the first NUL record ("## NAME...UPSTREAM …");
+    detached HEAD is "## HEAD (no branch)" and parses to None.
+    """
+    tokens = data.split(b"\x00")
+    branch = None
+    if tokens and tokens[0].startswith(b"##"):
+        branch = parse_branch_line(tokens[0].decode("utf-8", "replace"))
+        tokens = tokens[1:]
+    return branch, parse_status_tokens(tokens)
+
+
+def parse_branch_line(line):
+    """Parse the "## " branch header of `git status -b --porcelain=v1`.
+
+    Forms (verified on git 2.46):
+      "## main"                                 — no upstream
+      "## main...origin/main"                   — in sync
+      "## main...origin/main [ahead 1, behind 2]"
+      "## main...origin/main [gone]"            — upstream deleted remotely
+      "## No commits yet on main"               — unborn branch
+    Returns None for detached HEAD ("## HEAD (no branch)") or junk.
+    """
+    if not line.startswith("## "):
+        return None
+    body = line[3:].strip()
+    if not body or body.startswith("HEAD"):
+        return None
+    if body.startswith("No commits yet on "):
+        return BranchState(name=body[len("No commits yet on "):].strip())
+    name, _, rest = body.partition("...")
+    state = BranchState(name=name.strip())
+    upstream, _, flags = rest.partition(" [")
+    state.upstream = upstream.strip()
+    for part in flags.rstrip("]").split(","):
+        part = part.strip()
+        if part == "gone":
+            state.gone = True
+        elif part.startswith("ahead"):
+            state.ahead = _trailing_int(part)
+        elif part.startswith("behind"):
+            state.behind = _trailing_int(part)
+    return state
+
+
+def _trailing_int(text):
+    try:
+        return int(text.split()[-1])
+    except (IndexError, ValueError):
+        return 0
+
+
 def parse_status(data):
     """Parse `git status --porcelain=v1 -z` into GitFile entries.
 
     Rename records are "XY NEWPATH NUL OLDPATH" (verified on git 2.46).
     A file that is both staged and unstaged yields two entries, matching how
-    VS Code presents them.
+    VS Code presents them. -b branch header records are ignored.
     """
-    tokens = data.split(b"\x00")
+    return parse_status_tokens(data.split(b"\x00"))
+
+
+def parse_status_tokens(tokens):
     files = []
     i = 0
     while i < len(tokens):
@@ -141,6 +305,8 @@ def parse_status(data):
         i += 1
         if not token:
             continue
+        if token.startswith(b"##"):
+            continue  # -b branch header ("## main...origin/main [ahead 1]")
         entry = token.decode("utf-8", "replace")
         if len(entry) < 4:
             continue

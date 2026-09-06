@@ -4,6 +4,8 @@ Design rules:
 - argv is always a list, never shell=True
 - GIT_OPTIONAL_LOCKS=0 keeps git from writing the index for read-only
   commands, so the working directory is never touched
+- GIT_TERMINAL_PROMPT=0 makes credential prompts fail fast instead of
+  blocking a worker thread on a prompt this plugin can never answer
 - git runs on worker threads; UI callbacks are marshalled back with
   sublime.set_timeout
 """
@@ -51,6 +53,7 @@ def run_sync(cwd, args, timeout=None):
     timeout = timeout or get_setting("git_timeout", 20)
     env = dict(os.environ)
     env["GIT_OPTIONAL_LOCKS"] = "0"
+    env["GIT_TERMINAL_PROMPT"] = "0"
     cmd = [git_binary(), "-C", cwd] + list(args)
     try:
         proc = subprocess.Popen(
@@ -89,10 +92,16 @@ def run_bg(fn, on_done=None, on_error=None):
     def worker():
         try:
             result = fn()
-        except Exception as e:  # report anything to the UI, never crash the thread
-            print("SublimeGit: background task failed:", repr(e))
+        except Exception as exc:
+            # Rebind before leaving the except block: Python deletes the
+            # `except ... as` name on exit, and the lambda below runs later on
+            # the UI thread — capturing `exc` directly made every error
+            # delivery die with "free variable referenced before assignment",
+            # so on_error never ran.
+            error = exc
+            print("SublimeGit: background task failed:", repr(error))
             if on_error:
-                _ui(lambda: on_error(e))
+                _ui(lambda: on_error(error))
             return
         if on_done:
             _ui(lambda: on_done(result))

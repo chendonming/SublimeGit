@@ -8,10 +8,12 @@ Electron 的性能包袱。
 
 1. **Git Changes 面板** — 列出当前所有变更文件（staged / unstaged / untracked），
    光标所在行按 `⏎` 或双击，打开左右分栏 Diff（左 = 旧，右 = 新，增删改按
-   色彩区分，自动适配当前 Color Scheme）。
-2. **Git Timeline 面板** — 整个仓库的提交历史，列表只显示 title；鼠标悬停弹出
-   完整提交信息（title / body / trailers footer / 作者 / 时间）；`⏎` 打开该提交
-   变更文件列表，选择文件即查看该提交的 Diff。
+   色彩区分，自动适配当前 Color Scheme）。顶部有 **Push / Pull 按钮**，标题行
+   标注 upstream 与 `↑ahead ↓behind`，未推送的本地提交列在 **OUTGOING** 区块。
+2. **Git Timeline 面板** — 整个仓库的提交历史，列表只显示 title；提交行尾标注
+   推送状态（`↑` = 还不在任何远程上，`(origin/main)` = 该提交是远程分支指向处）；
+   鼠标悬停弹出完整提交信息（title / body / trailers footer / 作者 / 时间）；
+   `⏎` 打开该提交变更文件列表，选择文件即查看该提交的 Diff。
 3. **Git: File History** — `Cmd+Shift+P` 调出命令面板执行，用 quick panel 列出
    当前文件的提交历史（`git log --follow`，重命名可追踪），选择某条记录后以
    与 1 相同的左右分栏 Diff 展示。
@@ -44,6 +46,8 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 | `Git: Open Timeline` | 打开/聚焦提交历史面板 |
 | `Git: File History` | 当前文件历史（quick panel） |
 | `Git: Refresh Panel` | 刷新当前面板 |
+| `Git: Push` | 推送当前分支（需光标在 Changes 面板） |
+| `Git: Pull (fast-forward only)` | 拉取当前分支（需光标在 Changes 面板） |
 | `Git: Close Diff` | 关闭 Diff 分栏并恢复原布局 |
 
 面板内快捷键（只在 SublimeGit 的面板里生效，不影响正常编辑）：
@@ -54,6 +58,8 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 | `space` | Changes | 勾选 / 取消光标行的 checkbox |
 | `a` | Changes | 全选 / 清空所有 checkbox |
 | `⌘⏎` / `ctrl+⏎` | Changes | 提交所勾选的文件（输入信息后回车） |
+| `⌘⇧K` / `ctrl+⇧K` | Changes | Push 当前分支（无 upstream 时自动 `-u` 到第一个 remote） |
+| `⌘⌥P` / `ctrl+⌥P` | Changes | Pull 当前分支（仅 fast-forward） |
 | `r` | Changes / Timeline | 刷新 |
 | `m` | Timeline | 加载下一页提交（默认 100/页） |
 | `esc` | Diff 视图 | 关闭 Diff，恢复布局 |
@@ -75,7 +81,33 @@ checkbox 只表示「本次要操作的文件」，与 git 的 staged/unstaged �
 - 注意：提交走的是完整 index commit，仓库里**已有暂存内容**的文件即使没勾选
   也会进入这次提交（它们在 STAGED 分组里可见，请留意）。
 
-这是插件唯一的写操作路径，其余所有 git 调用保持只读。
+这是插件的写操作路径之一，其余所有 git 调用保持只读。
+
+### Push / Pull 与远程状态
+
+Changes 面板顶部有 Push / Pull 两个按钮，点击或用快捷键（`⌘⇧K` / `⌘⌥P`）触发：
+
+- **Push**：推送当前分支；分支还没有 upstream 时自动
+  `git push -u <第一个 remote> <分支>` 建立关联。
+- **Pull**：`git pull --ff-only`，只做 fast-forward。与上游分叉、需要真正
+  merge 时会明确报错并提示去终端处理——插件不主动制造 merge / 冲突状态。
+- 网络 git（push/pull）的超时独立于 `git_timeout`，由设置项
+  `git_network_timeout` 控制（默认 120s）；凭据缺失时借助
+  `GIT_TERMINAL_PROMPT=0` 快速失败并在状态栏给出可操作提示，不会卡住界面。
+
+远程状态在两个面板中显式标注（数据来自本地缓存的 remote-tracking refs，
+即最近一次 fetch 时的快照）：
+
+- **Changes 面板**：标题行显示 upstream 及 `↑ahead ↓behind`；存在未推送提交时，
+  列表顶部出现 **OUTGOING** 区块，列出「不在任何 remote 上的提交」（最多 8 条，
+  更多请去 Timeline），`⏎` 同样能打开该提交的变更文件列表。
+- **Timeline 面板**：标题行显示 `↑N unpushed` 统计；每条提交行尾——`↑` 表示
+  该提交还不在任何远程上，`(origin/main)` 标签表示该提交正是某个远程分支的
+  指向处；hover popup 与状态栏 hint 同样标注。
+
+「已在远程上」的判定是「可从任意 remote-tracking ref 可达」
+（`git rev-list HEAD --not --remotes`），而不是只和 upstream 比：曾经推到
+其他远程分支的提交不会被误标成未推送。
 
 ## 设计要点
 
@@ -98,9 +130,13 @@ SublimeGit/
 └── tests/                  # python3 -m unittest discover -s tests
 ```
 
-- **保护工作目录**：全部 git 调用均为只读，并设置 `GIT_OPTIONAL_LOCKS=0`
-  （连 index 的可选锁都不碰）；所有视图都是 scratch + read-only，绝不向
-  工作区写任何临时文件。
+- **错误显示在面板内**：任何后台失败（刷新 / push / pull / commit）都会在面板
+  内渲染红色错误横幅——一行可操作的简短提示 + git stderr 明细（最多 12 行），
+  状态栏同步一行摘要；`r` 刷新成功后自动清除。排查细节才需要开控制台。
+- **最小化写操作**：除交互式提交 / Push / Pull（仅 `--ff-only`）三个显式路径外，
+  全部 git 调用均为只读，并设置 `GIT_OPTIONAL_LOCKS=0` 与
+  `GIT_TERMINAL_PROMPT=0`（连 index 的可选锁都不碰，凭据缺失快速失败）；所有
+  视图都是 scratch + read-only，绝不向工作区写任何临时文件。
 - **命令类只放包顶层**：Sublime 只扫描包顶层 `.py` 文件来注册
   `sublime_plugin` 命令类；`core/`、`views/` 里的模块仅被 import，不会被
   扫描。命令类放子目录会静默失效（视图创建成功但永远渲染不出内容）。
@@ -123,7 +159,9 @@ python3 -m unittest discover -s tests
 
 ## 已知边界（v1）
 
-- 只读浏览，不提供 stage / commit / push 等写操作（后续可加）。
+- 写操作仅限交互式提交、Push、Pull（仅 fast-forward）；fetch / rebase / merge /
+  分支管理仍需终端。
+- 远程状态基于最近一次 fetch 的 remote-tracking refs 快照，不会自动 fetch。
 - Timeline 为线性列表，未画分支 DAG 图。
 - 超过 4000 行的 diff 跳过智能对齐，退化为逐行对比（避免 O(n²) 卡顿）。
 - 每个 window 按「第一个 folder」识别仓库；多仓库工作区暂不区分。

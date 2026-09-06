@@ -130,6 +130,26 @@ class SublimegitCommitSelectedCommand(sublime_plugin.TextCommand):
         changes_panel.commit_selected(self.view)
 
 
+class SublimegitPushCommand(sublime_plugin.TextCommand):
+    """Push the current branch (⌘⇧K / ctrl+shift+k in the Changes view)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "changes")
+
+    def run(self, edit):
+        changes_panel.push(self.view)
+
+
+class SublimegitPullCommand(sublime_plugin.TextCommand):
+    """Pull the current branch, fast-forward only (⌘⌥P / ctrl+alt+p)."""
+
+    def is_enabled(self):
+        return common.is_kind(self.view, "changes")
+
+    def run(self, edit):
+        changes_panel.pull(self.view)
+
+
 class SublimegitLoadMoreCommand(sublime_plugin.TextCommand):
     """Load the next page of commits (`m` in the Timeline view)."""
 

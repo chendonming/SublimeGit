@@ -1,15 +1,22 @@
 import os
 import sys
+import threading
+import time
 import unittest
+from unittest import mock
 
 if "sublime" not in sys.modules:
     # the repo root IS the SublimeGit package, so its parent goes on sys.path
     sys.path.insert(0, os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.abspath(__file__)))))
 
+from SublimeGit.core import git_runner
+from SublimeGit.core import repo as repo_mod
 from SublimeGit.core.models import GitFile, paths_to_stage, relative_time
-from SublimeGit.core.repo import (parse_file_history, parse_log,
-                                  parse_name_status, parse_status)
+from SublimeGit.core.repo import (parse_branch_line, parse_file_history,
+                                  parse_log, parse_name_status,
+                                  parse_status, parse_status_full)
+from SublimeGit.views.common import friendly_error
 
 RS = "\x1e"
 NUL = "\x00"
@@ -151,6 +158,201 @@ class PathsToStageTest(unittest.TestCase):
             GitFile(path="a.py", where="unstaged"),
         ])
         self.assertEqual(paths, ["a.py"])
+
+
+class ParseBranchLineTest(unittest.TestCase):
+    def test_plain_branch_without_upstream(self):
+        b = parse_branch_line("## main")
+        self.assertEqual((b.name, b.upstream, b.ahead, b.behind, b.gone),
+                         ("main", "", 0, 0, False))
+
+    def test_upstream_in_sync(self):
+        b = parse_branch_line("## main...origin/main")
+        self.assertEqual((b.name, b.upstream), ("main", "origin/main"))
+        self.assertEqual((b.ahead, b.behind, b.gone), (0, 0, False))
+
+    def test_ahead_and_behind(self):
+        b = parse_branch_line("## main...origin/main [ahead 2, behind 3]")
+        self.assertEqual((b.name, b.upstream, b.ahead, b.behind), ("main", "origin/main", 2, 3))
+
+    def test_ahead_only(self):
+        b = parse_branch_line("## main...origin/main [ahead 1]")
+        self.assertEqual((b.ahead, b.behind), (1, 0))
+
+    def test_behind_only(self):
+        b = parse_branch_line("## main...origin/main [behind 7]")
+        self.assertEqual((b.ahead, b.behind), (0, 7))
+
+    def test_gone_upstream(self):
+        b = parse_branch_line("## main...origin/main [gone]")
+        self.assertTrue(b.gone)
+
+    def test_non_numeric_counts_stay_zero(self):
+        b = parse_branch_line("## main...origin/main [ahead x]")
+        self.assertEqual((b.ahead, b.behind), (0, 0))
+
+    def test_unborn_branch(self):
+        b = parse_branch_line("## No commits yet on main")
+        self.assertEqual((b.name, b.upstream), ("main", ""))
+
+    def test_detached_head_is_none(self):
+        self.assertIsNone(parse_branch_line("## HEAD (no branch)"))
+
+    def test_junk_is_none(self):
+        self.assertIsNone(parse_branch_line("something else"))
+
+
+class ParseStatusFullTest(unittest.TestCase):
+    def test_branch_header_and_files(self):
+        data = "## main...origin/main [ahead 1]\x00MM a.py\x00".encode("utf-8")
+        branch, files = parse_status_full(data)
+        self.assertEqual(branch.upstream, "origin/main")
+        self.assertEqual(branch.ahead, 1)
+        self.assertEqual(len(files), 2)
+
+    def test_detached_header(self):
+        branch, files = parse_status_full(b"## HEAD (no branch)\x00 D a.py\x00")
+        self.assertIsNone(branch)
+        self.assertEqual((files[0].status, files[0].where), ("D", "unstaged"))
+
+    def test_plain_status_without_header_still_parses(self):
+        branch, files = parse_status_full(b"?? new.py\x00")
+        self.assertIsNone(branch)
+        self.assertEqual(files[0].where, "untracked")
+
+    def test_parse_status_tolerates_branch_records(self):
+        # -b output fed to the old parser must not produce fake file rows
+        files = parse_status(b"## main\x00M  a.py\x00")
+        self.assertEqual([f.path for f in files], ["a.py"])
+
+
+class PushPullTest(unittest.TestCase):
+    """Repository.push/pull argv decisions, with git subprocesses mocked out."""
+
+    def _patched(self, upstream_rc=0, remotes=b"origin\n", branch=b"feature\n"):
+        calls = []
+
+        def fake_run_sync(cwd, args, timeout=None):
+            calls.append(args)
+            if args[:2] == ["rev-parse", "--abbrev-ref"]:
+                if args[2].endswith("@{upstream}"):
+                    return upstream_rc, b"", b""
+                return 0, branch, b""
+            if args[0] == "remote":
+                return 0, remotes, b""
+            if args[0] in ("push", "pull"):
+                return 0, b"", b"main -> main\n"
+            return 0, b"", b""
+
+        patcher = mock.patch("SublimeGit.core.git_runner.run_sync", fake_run_sync)
+        return calls, patcher
+
+    def test_push_plain_when_upstream_exists(self):
+        calls, patcher = self._patched()
+        with patcher:
+            line = repo_mod.Repository("/r").push()
+        self.assertIn(["push"], calls)
+        self.assertEqual(line, "main -> main")
+
+    def test_push_sets_upstream_on_first_remote_when_missing(self):
+        calls, patcher = self._patched(upstream_rc=1)
+        with patcher:
+            repo_mod.Repository("/r").push()
+        self.assertIn(["push", "-u", "origin", "feature"], calls)
+
+    def test_push_without_remote_raises(self):
+        calls, patcher = self._patched(upstream_rc=1, remotes=b"")
+        with patcher:
+            with self.assertRaises(git_runner.GitError):
+                repo_mod.Repository("/r").push()
+
+    def test_pull_is_fast_forward_only(self):
+        calls, patcher = self._patched()
+        with patcher:
+            repo_mod.Repository("/r").pull()
+        self.assertIn(["pull", "--ff-only"], calls)
+
+    def test_pull_without_upstream_raises(self):
+        calls, patcher = self._patched(upstream_rc=1)
+        with patcher:
+            with self.assertRaises(git_runner.GitError):
+                repo_mod.Repository("/r").pull()
+
+    def test_detached_head_refuses_sync(self):
+        calls, patcher = self._patched(branch=b"HEAD\n")
+        with patcher:
+            with self.assertRaises(git_runner.GitError):
+                repo_mod.Repository("/r").push()
+
+
+class RunBgTest(unittest.TestCase):
+    """run_bg must deliver errors on a deferred callback (as set_timeout does).
+
+    Under plain python3 (sublime=None) _ui runs synchronously INSIDE the
+    except block, which is exactly why the `except ... as e` deletion bug
+    never showed up here — so these tests defer the callback manually.
+    """
+
+    def _deferred_run(self, fn, **kwargs):
+        from SublimeGit.core import git_runner
+
+        deferred, threads = [], []
+        real_thread = threading.Thread
+
+        def fake_thread(*a, **k):
+            t = real_thread(*a, **k)
+            threads.append(t)
+            return t
+
+        with mock.patch.object(git_runner, "_ui", deferred.append), \
+                mock.patch.object(git_runner.threading, "Thread",
+                                  side_effect=fake_thread):
+            git_runner.run_bg(fn, **kwargs)
+            for t in threads:
+                t.join(timeout=2)
+        time.sleep(0.01)  # let the worker fully exit its except block
+        return deferred
+
+    def test_error_delivered_after_except_block_exits(self):
+        def boom():
+            raise ValueError("boom")
+
+        delivered = []
+        deferred = self._deferred_run(boom, on_error=delivered.append)
+        self.assertEqual(len(deferred), 1)
+        deferred[0]()
+        self.assertIsInstance(delivered[0], ValueError)
+
+    def test_result_delivered_on_success(self):
+        delivered = []
+        deferred = self._deferred_run(lambda: 42, on_done=delivered.append)
+        self.assertEqual(len(deferred), 1)
+        deferred[0]()
+        self.assertEqual(delivered[0], 42)
+
+
+class FriendlyErrorTest(unittest.TestCase):
+    """friendly_error maps git stderr onto actionable one-liners."""
+
+    def test_push_rejection_points_to_terminal_pull(self):
+        e = git_runner.GitError(["push"], 1,
+                                "! [rejected] master -> master (fetch first)")
+        self.assertIn("git pull", friendly_error(e))
+
+    def test_ff_only_refusal(self):
+        e = git_runner.GitError(["pull"], 1,
+                                "fatal: Not possible to fast-forward, aborting.")
+        self.assertIn("fast-forward", friendly_error(e))
+
+    def test_credential_failure(self):
+        e = git_runner.GitError(["push"], 128,
+                                "fatal: could not read Username for 'https://x': "
+                                "terminal prompts disabled")
+        self.assertIn("authentication", friendly_error(e))
+
+    def test_fallback_uses_last_stderr_line(self):
+        e = git_runner.GitError(["status"], 128, "hint: a\nfatal: bad object HEAD")
+        self.assertEqual(friendly_error(e), "fatal: bad object HEAD")
 
 
 if __name__ == "__main__":
