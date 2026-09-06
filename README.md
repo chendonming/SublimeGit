@@ -24,9 +24,15 @@ Electron 的性能包袱。
 ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeGit"
 ```
 
+> 注意：**包根目录的 `.python-version` 文件（内容为 `3.8`）必须一起带上**——
+> 它声明插件由 ST4 的 Python 3.8 宿主加载。若用复制方式安装，不要只拷 `.py`
+> 文件；若控制台出现 `reloading python 3.3 plugin SublimeGit.*` +
+> `SyntaxError: invalid syntax`，就是这个文件没到位。
+
 要求 Sublime Text **Build 4050+**（默认 Python 3.8 插件宿主）与系统 `git`
 （也可在设置里指定 `git_path`）。装好后重启 Sublime 或在 Console 里执行
-`sublime.packages_path()` 确认路径即可。
+`sublime.packages_path()` 确认路径即可。加载成功时 Console 应显示
+`reloading python 3.8 plugin SublimeGit.plugin` 且无 Traceback。
 
 ## 使用
 
