@@ -1,0 +1,10 @@
+{
+    // Path to the git executable; empty = auto-detect from PATH
+    "git_path": "",
+    // Seconds before a git subprocess is killed
+    "git_timeout": 20,
+    // Commits loaded per page in the Git Timeline
+    "log_page_size": 100,
+    // Max commits listed by Git: File History
+    "file_history_limit": 200
+}

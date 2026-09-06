@@ -1,0 +1,14 @@
+[
+    { "keys": ["enter"], "command": "sublimegit_open_selection",
+      "context": [{ "key": "setting.sublimegit.view", "operator": "equal", "operand": "changes" }] },
+    { "keys": ["enter"], "command": "sublimegit_open_selection",
+      "context": [{ "key": "setting.sublimegit.view", "operator": "equal", "operand": "timeline" }] },
+    { "keys": ["r"], "command": "sublimegit_refresh_view",
+      "context": [{ "key": "setting.sublimegit.view", "operator": "equal", "operand": "changes" }] },
+    { "keys": ["r"], "command": "sublimegit_refresh_view",
+      "context": [{ "key": "setting.sublimegit.view", "operator": "equal", "operand": "timeline" }] },
+    { "keys": ["m"], "command": "sublimegit_load_more",
+      "context": [{ "key": "setting.sublimegit.view", "operator": "equal", "operand": "timeline" }] },
+    { "keys": ["escape"], "command": "sublimegit_close_diff",
+      "context": [{ "key": "setting.sublimegit.view", "operator": "equal", "operand": "diff" }] }
+]
