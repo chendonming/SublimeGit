@@ -1,0 +1,13 @@
+[
+    { "caption": "Git", "children":
+        [
+            { "caption": "Panel", "command": "sublimegit_open_changes" },
+            { "caption": "File History", "command": "sublimegit_file_history" },
+            { "caption": "Open Timeline", "command": "sublimegit_open_timeline" },
+            { "caption": "-" },
+            { "caption": "Push", "command": "sublimegit_push" },
+            { "caption": "Pull", "command": "sublimegit_pull" },
+            { "caption": "Switch Branch", "command": "sublimegit_switch_branch" }
+        ]
+    }
+]

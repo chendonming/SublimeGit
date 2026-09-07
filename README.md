@@ -50,11 +50,17 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 | `Git: Stage Selected Files` | 暂存所勾选的文件（需光标在 Git Panel） |
 | `Git: Unstage Selected Files` | 取消暂存所勾选的文件（需光标在 Git Panel） |
 | `Git: Refresh Panel` | 刷新当前面板 |
-| `Git: Push` | 推送当前分支（需光标在 Git Panel） |
+| `Git: Push` | 推送当前分支（任意视图可用，自动打开并聚焦 Git Panel） |
 | `Git: Undo Last Commit` | 撤销最新未推送提交（需光标在 Git Panel） |
-| `Git: Pull (pull_mode: rebase / ff-only)` | 拉取当前分支（需光标在 Git Panel） |
-| `Git: Switch Branch` | quick panel 选择并切换本地分支（需光标在 Git Panel） |
+| `Git: Pull (pull_mode: rebase / ff-only)` | 拉取当前分支（任意视图可用，自动打开并聚焦 Git Panel） |
+| `Git: Switch Branch` | quick panel 选择并切换本地分支（任意视图可用，自动打开并聚焦 Git Panel） |
 | `Git: Close Diff` | 关闭 Diff 分栏、恢复布局，并回到打开 Diff 前的视图 |
+
+右键菜单：编辑器任意位置右键 → `Git` 子菜单，高频入口不用再绕命令面板——
+**Panel** / **File History** / **Open Timeline** 与命令面板同名命令一致；
+**Push** / **Pull** / **Switch Branch** 从任何视图都能触发，插件会先打开并聚焦
+本窗口的 Git Panel 再执行与面板按键相同的操作，结果与错误照常显示在面板里
+（面板已打开且聚焦时等价于直接按键）。
 
 面板内快捷键（只在 SublimeGit 的面板里生效，不影响正常编辑）：
 
@@ -115,7 +121,9 @@ Git Panel 是 yazi 风格的两步操作：先选中、再执行。列表顶部�
 ### Push / Pull / Undo / Branch 与远程状态
 
 Git Panel 顶部有 Push / Pull / Undo / Branch 四个按钮，点击或用快捷键
-（`shift+p` / `p` / `u` / `b`）触发：
+（`shift+p` / `p` / `u` / `b`）触发；Push / Pull / Branch 也能从编辑器右键
+菜单的 `Git` 子菜单或命令面板在任意视图触发——插件会先打开并聚焦 Git Panel
+再执行：
 
 - **Push**：推送当前分支；分支还没有 upstream 时自动
   `git push -u <第一个 remote> <分支>` 建立关联。

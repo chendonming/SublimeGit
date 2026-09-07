@@ -698,6 +698,32 @@ def _run_checkout(view, window, root, b):
     git_runner.run_bg(work, done, err)
 
 
+def run_anywhere(window, op):
+    """Entry points outside the panel (context menu, command palette from a
+    normal view) funnel here: make sure this window's Git Panel exists and is
+    focused, then run the same op the panel's own keys run. Keeps the syncing
+    guard, the post-op refresh, and the in-panel error banner on one code
+    path — write ops never run without the panel to show their result. `op`
+    is "push" | "pull" | "branch".
+    """
+    ops = {"push": push, "pull": pull, "branch": switch_branch}
+    view = window.active_view()
+    if view and common.is_kind(view, KIND):
+        ops[op](view)  # already the panel — same as pressing the key
+        return
+
+    def ok(root):
+        panel = _ensure_view(window, root)
+        window.focus_view(panel)
+        refresh(panel)  # fill the view; the op's own done() refreshes again
+        ops[op](panel)
+
+    def fail():
+        window.status_message("SublimeGit: no git repository found in this window")
+
+    common.resolve_repo(window, on_ok=ok, on_fail=fail)
+
+
 def commit_selected(view):
     st = common.state(view)
     files = st.get("files") or []

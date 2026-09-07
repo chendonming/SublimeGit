@@ -43,7 +43,12 @@ Packages). Feature docs live in README.md.
   are a bug the user explicitly rejected.
 - **Panel views are scratch + read-only; git runs read-only with
   `GIT_OPTIONAL_LOCKS=0`** — except six explicit write paths reached only
-  from user action in the Changes panel: the commit flow
+  from user action in the Changes panel (the context-menu `Git` submenu and
+  the palette's Push / Pull / Switch Branch entries from a normal view are
+  NOT extra write paths — they funnel through the panel via
+  `changes_panel.run_anywhere`, which opens and focuses the panel first so
+  guards, refresh, and the in-panel error banner stay on one code path):
+  the commit flow
   (`Repository.stage_files` + `Repository.commit`), selection-based staging
   (`shift+S` = `Repository.stage_files` for the checked unstaged/untracked
   rows via `paths_to_stage`; `s` = `Repository.unstage_files` =
@@ -61,7 +66,8 @@ Packages). Feature docs live in README.md.
   plain merge is still never offered — `Repository.undo_last_commit`
   (soft `reset --soft HEAD~1`, refused when HEAD is reachable from any
   remote; the parentless root commit goes through `update-ref -d HEAD`) —
-  and `Repository.checkout` (`b` key or the ⎇ Branch toolbar button; a quick
+  and `Repository.checkout` (`b` key, the ⎇ Branch toolbar button, or the
+  context-menu / palette entry routed through `run_anywhere`; a quick
   panel of local branches from `for-each-ref refs/heads --sort=-committerdate`,
   current one starred via `%(HEAD)`, picking the starred row is a no-op;
   plain `git checkout <branch>`, never `-f` — when the switch would overwrite

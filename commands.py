@@ -142,24 +142,20 @@ class SublimegitCommitSelectedCommand(sublime_plugin.TextCommand):
         changes_panel.commit_selected(self.view)
 
 
-class SublimegitPushCommand(sublime_plugin.TextCommand):
-    """Push the current branch (shift+P / ⌘⇧K / ctrl+shift+k in the Changes view)."""
+class SublimegitPushCommand(sublime_plugin.WindowCommand):
+    """Push the current branch (shift+P / ⌘⇧K / ctrl+shift+k in the Changes
+    view, or the context menu's Git submenu from any view)."""
 
-    def is_enabled(self):
-        return common.is_kind(self.view, "changes")
-
-    def run(self, edit):
-        changes_panel.push(self.view)
+    def run(self):
+        changes_panel.run_anywhere(self.window, "push")
 
 
-class SublimegitPullCommand(sublime_plugin.TextCommand):
-    """Pull the current branch, mode from `pull_mode` (p / ⌘⌥P / ctrl+alt+p)."""
+class SublimegitPullCommand(sublime_plugin.WindowCommand):
+    """Pull the current branch, mode from `pull_mode` (p / ⌘⌥P / ctrl+alt+p
+    in the Changes view, or the context menu's Git submenu from any view)."""
 
-    def is_enabled(self):
-        return common.is_kind(self.view, "changes")
-
-    def run(self, edit):
-        changes_panel.pull(self.view)
+    def run(self):
+        changes_panel.run_anywhere(self.window, "pull")
 
 
 class SublimegitStageSelectedCommand(sublime_plugin.TextCommand):
@@ -192,14 +188,12 @@ class SublimegitUndoCommitCommand(sublime_plugin.TextCommand):
         changes_panel.undo_commit(self.view)
 
 
-class SublimegitSwitchBranchCommand(sublime_plugin.TextCommand):
-    """Switch branch via quick panel (b / ⎇ Branch in the Changes view)."""
+class SublimegitSwitchBranchCommand(sublime_plugin.WindowCommand):
+    """Switch branch via quick panel (b / ⎇ Branch in the Changes view, or
+    the context menu's Git submenu from any view)."""
 
-    def is_enabled(self):
-        return common.is_kind(self.view, "changes")
-
-    def run(self, edit):
-        changes_panel.switch_branch(self.view)
+    def run(self):
+        changes_panel.run_anywhere(self.window, "branch")
 
 
 class SublimegitLoadMoreCommand(sublime_plugin.TextCommand):
