@@ -54,7 +54,7 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 | `Git: Undo Last Commit` | 撤销最新未推送提交（需光标在 Git Panel） |
 | `Git: Pull (pull_mode: rebase / ff-only)` | 拉取当前分支（需光标在 Git Panel） |
 | `Git: Switch Branch` | quick panel 选择并切换本地分支（需光标在 Git Panel） |
-| `Git: Close Diff` | 关闭 Diff 分栏并恢复原布局 |
+| `Git: Close Diff` | 关闭 Diff 分栏、恢复布局，并回到打开 Diff 前的视图 |
 
 面板内快捷键（只在 SublimeGit 的面板里生效，不影响正常编辑）：
 
@@ -75,7 +75,7 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 | `r` | Git Panel / Timeline | 刷新 |
 | `m` | Timeline | 加载下一页提交（默认 100/页） |
 | `j` / `k` | Diff 视图 | 跳到下一个 / 上一个修改块 |
-| `esc` | Diff 视图 | 关闭 Diff，恢复布局 |
+| `esc` | Diff 视图 | 关闭 Diff，恢复布局，回到打开 Diff 前的视图（Git Panel / Timeline / 原文件） |
 
 快捷键思路与 yazi 一致：小写键做无副作用的操作（勾选、全选、pull 进来），
 大写键做有副作用的操作（暂存、push 出去）；先 `space`/`a` 选中，再 `s`/`shift+s` 批量执行。

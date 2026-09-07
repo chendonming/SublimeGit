@@ -20,6 +20,7 @@ from SublimeGit.views import common
 KIND = "diff"
 DIFF_KEY = "sublimegit.diff"
 PREV_LAYOUT_KEY = "sublimegit.prev_layout"
+ORIGIN_KEY = "sublimegit.diff_origin"  # window setting: id of the view to return to on close
 HEADER_ROWS = 2  # title line + rule line
 
 SCOPE_INSERTED = "markup.inserted.diff"
@@ -31,6 +32,11 @@ SCOPE_MUTED = "comment"
 def open_diff(window, ctx):
     if window is None:
         return
+    # remember where the diff was opened from so closing it lands back there;
+    # a re-render (reload) runs with a diff view active — keep the original
+    active = window.active_view()
+    if active is not None and not common.is_kind(active, KIND):
+        window.settings().set(ORIGIN_KEY, active.id())
     repo = Repository(ctx.repo_root)
 
     def work():
@@ -244,6 +250,10 @@ class _ScrollSync:
 
 
 def close_diff(window, restore_layout=True):
+    # returning focus to the origin view only makes sense when the whole diff
+    # is going away; the re-render path (restore_layout=False) keeps both the
+    # origin record and the current focus untouched
+    origin_id = window.settings().get(ORIGIN_KEY) if restore_layout else None
     _SCROLL_SYNC.pop(window.id(), None)
     for view in list(window.views()):
         try:
@@ -259,6 +269,12 @@ def close_diff(window, restore_layout=True):
             except Exception:
                 pass
             window.settings().erase(PREV_LAYOUT_KEY)
+        window.settings().erase(ORIGIN_KEY)
+        if origin_id is not None:
+            for view in window.views():
+                if view.id() == origin_id:
+                    window.focus_view(view)
+                    break
 
 
 def reload_diff(view):

@@ -60,7 +60,8 @@ class SublimegitFileHistoryCommand(sublime_plugin.WindowCommand):
 
 
 class SublimegitCloseDiffCommand(sublime_plugin.WindowCommand):
-    """Git: Close Diff — close both diff panes and restore the layout."""
+    """Git: Close Diff — close both diff panes, restore the layout, and
+    refocus the view the diff was opened from (Git Panel, Timeline, …)."""
 
     def run(self):
         diff_view.close_diff(self.window)

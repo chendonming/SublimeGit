@@ -111,6 +111,13 @@ Packages). Feature docs live in README.md.
   render the same aligned row list. It self-stops when either view dies. The
   `expected`-write guard is load-bearing: without it the syncer reads its own
   writes as user scrolls and the two panes fight each other.
+- **Closing the diff returns focus to the view it was opened from** — `open_diff`
+  stores the active view's id in the window setting `sublimegit.diff_origin`
+  (skipped when the active view is itself a diff, so re-renders keep the
+  original), and `close_diff` with `restore_layout=True` refocuses that id
+  after restoring the layout. The record is erased on close; a stale id
+  (origin view closed meanwhile) simply finds nothing and falls back to
+  Sublime's own focus choice.
 - **All git I/O is async** through `core/git_runner.run_bg`: git runs on a worker
   thread, results arrive on the UI thread. Every async render bumps a `gen` counter in
   the view's state (`views/common.state`) and drops stale results — keep this pattern
