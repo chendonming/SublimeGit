@@ -56,9 +56,16 @@ class Repository:
     # -- status -----------------------------------------------------------
 
     def status(self):
-        """One `git status -z -b` call → (BranchState|None, [GitFile])."""
+        """One `git status -z -b` call → (BranchState|None, [GitFile]).
+
+        --untracked-files=all lists every untracked file as its own record;
+        the default "normal" mode collapses a wholly untracked directory into
+        a single `?? dir/` record, which would leave the panel a directory
+        row with nothing diffable beneath it. The tree display is drawn from
+        per-file records by core/file_tree instead.
+        """
         out = git_runner.run_ok(self.root, [
-            "status", "--porcelain=v1", "-z", "-b", "--untracked-files=normal"])
+            "status", "--porcelain=v1", "-z", "-b", "--untracked-files=all"])
         return parse_status_full(out)
 
     def status_files(self):

@@ -7,6 +7,13 @@ Checkboxes mean "selected for the next operation" and stay separate from git's
 staged/unstaged split. Diff refs are VS Code-style: staged = HEAD vs INDEX,
 unstaged = INDEX vs WORKTREE.
 
+Each group renders as a compressed path tree (`core/file_tree`): chains of
+single-child directories fold into one label, so a new untracked
+`.../wechat/` folder shows as one dim directory row with its files indented
+beneath it, while a lone `core/repo.py` keeps its flat full-path row.
+Directory rows are display-only — checkboxes, status letters and the diff
+actions (space / enter / double-click) belong to file rows alone.
+
 Selection is yazi-style: space toggles the checkbox under the cursor (the
 root ALL row toggles everything), `a`/`shift+a` select all/none, then
 `shift+S` stages the checked files and `s` unstages them — index-only, the
@@ -37,6 +44,7 @@ import time
 
 import sublime
 
+from SublimeGit.core import file_tree
 from SublimeGit.core import git_runner
 from SublimeGit.core import repo as repo_mod
 from SublimeGit.core.models import DiffContext, paths_to_stage
@@ -183,6 +191,7 @@ def _render(view, branch, files, has_remote=False, unpushed=frozenset(), sample=
     error_rows = []
     header_rows = []
     checked_rows = []
+    dir_rows = {}  # row -> directory label; display-only rows (no diff/stage)
     lines = []
 
     def emit(text):
@@ -232,10 +241,16 @@ def _render(view, branch, files, has_remote=False, unpushed=frozenset(), sample=
         if not group:
             continue
         header_rows.append(emit("  {}".format(title)))
-        for f in group:
+        for t in file_tree.build_tree(group):
+            indent = "  " * t.depth
+            if t.kind == file_tree.DIR:
+                # directory label, aligned with the depth-0 file path column
+                dir_rows[emit("        {}{}".format(indent, t.label))] = t.label
+                continue
+            f = t.file
             checked = _key(f) in selected
             row = emit(ROW_FMT.format(
-                CHECK_ON if checked else CHECK_OFF, f.status, f.display_path))
+                CHECK_ON if checked else CHECK_OFF, f.status, indent + t.label))
             rows[row] = f
             if checked:
                 checked_rows.append(row)
@@ -252,6 +267,12 @@ def _render(view, branch, files, has_remote=False, unpushed=frozenset(), sample=
     view.add_regions("sg-head",
                      [view.full_line(view.text_point(r, 0)) for r in header_rows],
                      "comment")
+    view.erase_regions("sg-dir")
+    if dir_rows:
+        # directory rows render dim like headers — they are structure, not files
+        view.add_regions("sg-dir",
+                         [view.full_line(view.text_point(r, 0)) for r in dir_rows],
+                         "comment")
     by_scope = {}
     for row, f in rows.items():
         scope = LETTER_SCOPES.get(f.status, "markup.changed.diff")
@@ -290,6 +311,7 @@ def _render(view, branch, files, has_remote=False, unpushed=frozenset(), sample=
     st["rows"] = rows
     st["commit_rows"] = commit_rows
     st["root_row"] = root_row
+    st["dir_rows"] = dir_rows
 
 
 def _render_toolbar(view):
@@ -318,6 +340,12 @@ def open_at_row(view, row):
     st = common.state(view)
     if st.get("root_row") == row:
         view.set_status("sublimegit", "ALL is not a file — space toggles every checkbox")
+        return
+    dir_label = st.get("dir_rows", {}).get(row)
+    if dir_label is not None:
+        view.set_status("sublimegit",
+                        "{} is a directory — ⏎ opens diffs on the files under it".format(
+                            dir_label))
         return
     commit = st.get("commit_rows", {}).get(row)
     if commit is not None:
@@ -372,6 +400,11 @@ def toggle_at_row(view, row):
     st = common.state(view)
     if st.get("root_row") == row:
         _toggle_all(view)
+        return
+    if row in st.get("dir_rows", {}):
+        view.set_status("sublimegit",
+                        "{} is a directory — space toggles file checkboxes".format(
+                            st["dir_rows"][row]))
         return
     f = st.get("rows", {}).get(row)
     if f is None:
@@ -788,6 +821,12 @@ def show_hint(view):
     if st.get("root_row") == row:
         view.set_status("sublimegit",
                         "ALL — space selects/deselects everything · a all · A none")
+        return
+    dir_label = st.get("dir_rows", {}).get(row)
+    if dir_label is not None:
+        view.set_status("sublimegit",
+                        "{} — directory · ⏎ opens diffs on the files under it".format(
+                            dir_label))
         return
     f = st.get("rows", {}).get(row)
     if f:

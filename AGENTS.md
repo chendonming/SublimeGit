@@ -86,7 +86,18 @@ Packages). Feature docs live in README.md.
   there are files, row number in `state["root_row"]`): `space` on it toggles
   every file, `a`/`shift+a` select all/none. Its checkbox is `☑` when all
   files are checked, `▣` (`markup.changed.diff`) when some are, `☐` otherwise.
-  Lookup order for a cursor row: `commit_rows` → `root_row` → `rows`.
+  Lookup order for a cursor row: `root_row` → `dir_rows` → `commit_rows` →
+  `rows` (directory rows sit between the root and the files — see below).
+- **Directory rows in the Changes panel are display-only** — every group
+  renders through `core/file_tree.build_tree`, which compresses single-child
+  directory chains into one label: a lone `core/repo.py` keeps its flat
+  full-path row, a new `.../wechat/` folder becomes one dim directory row
+  (comment scope, row → label map in `state["dir_rows"]`) with its files
+  indented beneath it. Directory rows carry no checkbox or status letter;
+  space / ⏎ / double-click on them only set a status hint — diff and
+  staging act on file rows alone. `Repository.status` runs
+  `--untracked-files=all` so git reports untracked files individually,
+  never as a collapsed `?? dir/` record.
 - **The Changes panel's Push/Pull/Undo toolbar is a `LAYOUT_BLOCK` phantom pinned
   at Region(0, 0)**, erased and re-added on every render. Phantoms occupy
   layout space but not buffer positions, so all row/col math is unaffected.
@@ -135,6 +146,11 @@ Packages). Feature docs live in README.md.
 ## Git parsing facts (verified on git 2.46 — re-verify before "fixing")
 
 - `status --porcelain=v1 -z`: rename records are `XY NEWPATH<NUL>OLDPATH`.
+- `status --untracked-files=all` lists each file of an untracked directory as
+  its own `??` record; the default `normal` mode collapses the whole
+  directory into one `?? dir/` record (verified on git 2.46). The panel
+  needs per-file records — its directory rows are drawn by `core/file_tree`,
+  not by git.
 - `status --porcelain=v1 -z -b`: the branch header is the first NUL record —
   `## NAME...UPSTREAM [ahead N, behind M]`, `[gone]` when the upstream was
   deleted remotely, `## HEAD (no branch)` when detached.

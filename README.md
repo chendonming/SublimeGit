@@ -7,6 +7,10 @@ Electron 的性能包袱。
 覆盖三个核心场景：
 
 1. **Git Panel** — 列出当前所有变更文件（staged / unstaged / untracked），
+   每组按**压缩目录树**绘制：单链目录折叠成一行（如新的未跟踪目录
+   `…/common/wechat/` 只占一行，其下缩进列出里面的文件），孤立的文件仍显示
+   完整路径。目录行仅作展示，`⏎` / 双击 / `space` 等 Diff 与勾选操作只对
+   文件行生效。
    光标所在行按 `⏎` 或双击，打开左右分栏 Diff（左 = 旧，右 = 新，增删改按
    色彩区分，自动适配当前 Color Scheme）。顶部有 **Push / Pull / Undo / Branch 按钮**，
    标题行标注 upstream 与 `↑ahead ↓behind`，未推送的本地提交列在 **OUTGOING**
@@ -66,7 +70,7 @@ ln -s "$(pwd)" "$HOME/Library/Application Support/Sublime Text/Packages/SublimeG
 
 | 键 | 面板 | 作用 |
 | --- | --- | --- |
-| `⏎` / 双击 | Git Panel / Timeline | 打开光标所在项的 Diff / 提交 |
+| `⏎` / 双击 | Git Panel / Timeline | 打开光标所在项的 Diff / 提交（目录树行仅展示，无 Diff） |
 | `space` | Git Panel | 勾选 / 取消光标行的 checkbox；在根节点 `ALL` 行上 = 全选 / 反选全部 |
 | `a` / `shift+a` | Git Panel | 全选 / 清空所有 checkbox |
 | `shift+s` | Git Panel | 暂存所勾选的文件（只有 unstaged / untracked 行生效） |
